@@ -28,6 +28,12 @@ export function createEngine(onStatus){
   let readyPromise = null;
   const status = (msg) => { if (onStatus) onStatus(msg); };
 
+  function terminate(){
+    if (worker){ try{ worker.terminate(); }catch(e){ /* ignore */ } }
+    worker = null;
+    readyPromise = null;
+  }
+
   function init(){
     if (readyPromise) return readyPromise;
     readyPromise = (async () => {
@@ -53,13 +59,38 @@ export function createEngine(onStatus){
       status('Engine ready.');
       return worker;
     })();
+    readyPromise.catch(() => { terminate(); }); // don't leave a broken worker cached
     return readyPromise;
   }
 
   function analyze(fen, movetimeMs, onDepth){
     return new Promise((resolve, reject) => {
       if (!worker){ reject(new Error('Engine not initialized.')); return; }
+      const activeWorker = worker;
       let lastInfo = null;
+      let settled = false;
+
+      // The device (especially with the screen off or the app backgrounded)
+      // can pause the worker's internal timers mid-search, so a "go movetime"
+      // occasionally never comes back with a bestmove. Give it generous extra
+      // time over what was actually asked for, then give up and recycle the
+      // worker so the *next* attempt starts from a clean, known-good engine
+      // instead of hanging forever on this stuck one.
+      const watchdog = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        activeWorker.removeEventListener('message', handler);
+        if (worker === activeWorker) terminate();
+        reject(new Error('Engine stopped responding and was restarted — try Calculate again.'));
+      }, movetimeMs + 15000);
+
+      function finish(fn){
+        if (settled) return;
+        settled = true;
+        clearTimeout(watchdog);
+        activeWorker.removeEventListener('message', handler);
+        fn();
+      }
       function handler(e){
         const line = e.data;
         if (typeof line !== 'string') return;
@@ -68,18 +99,25 @@ export function createEngine(onStatus){
           const m = line.match(/\bdepth (\d+)/);
           if (m && onDepth) onDepth(m[1]);
         } else if (line.startsWith('bestmove')){
-          worker.removeEventListener('message', handler);
           const parts = line.split(' ');
-          resolve({ bestMove: parts[1], lastInfo });
+          finish(() => resolve({ bestMove: parts[1], lastInfo }));
         }
       }
-      worker.addEventListener('message', handler);
-      worker.postMessage('position fen ' + fen);
-      worker.postMessage('go movetime ' + movetimeMs);
+      activeWorker.addEventListener('message', handler);
+      const prevOnError = activeWorker.onerror;
+      activeWorker.onerror = (err) => {
+        finish(() => { if (worker === activeWorker) terminate(); reject(new Error('Engine worker error: ' + (err.message||'unknown'))); });
+      };
+      // Defensively stop any search this worker thinks is still running
+      // (e.g. left over from a previous call that never finished) before
+      // starting the new one.
+      activeWorker.postMessage('stop');
+      activeWorker.postMessage('position fen ' + fen);
+      activeWorker.postMessage('go movetime ' + movetimeMs);
     });
   }
 
-  return { init, analyze };
+  return { init, analyze, reset: terminate };
 }
 
 export function parseEval(infoLine, sideToMove){
