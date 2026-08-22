@@ -362,6 +362,17 @@ function renderBoard(){
   clearHighlights();
 }
 
+// If a king is moved two squares horizontally king-side/queen-side from its
+// home square, bring the matching rook along too — same convention as the
+// "Play this move" castling handling below, but usable from manual tap-to-move.
+function maybeMoveCastlingRook(piece, from, to){
+  if (!piece || piece.toLowerCase() !== 'k') return;
+  if (from==='e1' && to==='g1'){ board['f1']=board['h1']; delete board['h1']; }
+  else if (from==='e1' && to==='c1'){ board['d1']=board['a1']; delete board['a1']; }
+  else if (from==='e8' && to==='g8'){ board['f8']=board['h8']; delete board['h8']; }
+  else if (from==='e8' && to==='c8'){ board['d8']=board['a8']; delete board['a8']; }
+}
+
 function onSquareClick(square){
   if (selectedTool === 'erase'){
     pickedUpSquare = null;
@@ -380,6 +391,7 @@ function onSquareClick(square){
     const piece = board[pickedUpSquare];
     delete board[pickedUpSquare];
     board[square] = piece;
+    maybeMoveCastlingRook(piece, pickedUpSquare, square);
     pickedUpSquare = null;
   } else if (board[square]){
     // First tap on an occupied square with no palette tool selected: pick it
@@ -689,13 +701,7 @@ btnPlayMove.addEventListener('click', () => {
   const isCapture = !!board[to];
   delete board[from];
   board[to] = promotion ? (turn==='w' ? promotion.toUpperCase() : promotion.toLowerCase()) : movingPiece;
-  // very light-weight castling rook move handling
-  if (movingPiece && movingPiece.toLowerCase()==='k'){
-    if (from==='e1' && to==='g1'){ board['f1']=board['h1']; delete board['h1']; }
-    if (from==='e1' && to==='c1'){ board['d1']=board['a1']; delete board['a1']; }
-    if (from==='e8' && to==='g8'){ board['f8']=board['h8']; delete board['h8']; }
-    if (from==='e8' && to==='c8'){ board['d8']=board['a8']; delete board['a8']; }
-  }
+  maybeMoveCastlingRook(movingPiece, from, to);
   if (movingPiece==='p' || movingPiece==='P' || isCapture) halfmove = 0; else halfmove++;
   if (turn==='b') fullmove++;
   setTurnUI(turn==='w' ? 'b' : 'w');
