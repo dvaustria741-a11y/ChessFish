@@ -1,24 +1,43 @@
 # ChessFish
 
-A pocket best-move helper: set up any position, run real Stockfish 18 (WASM,
-lite/single-thread build) fully client-side, and see exactly where the engine
-wants you to move — including a plain-language callout when the best move is
-a pawn push.
+A pocket chess toolkit built as a minimal Android WebView shell around a
+few self-contained web pages. No backend — the board, the engine, and any
+chess.com data you pull in all live and run on-device.
 
-The whole app is a single self-contained web page
-(`app/src/main/assets/chess-helper.html`) wrapped in a minimal Android WebView
-shell. No backend, nothing uploaded — the position and the engine both run
-on-device in the WebView.
+Two tools, picked from a landing screen (`app/src/main/assets/home.html`):
 
-- Board setup: tap a piece in the palette then tap a square to place it, tap
-  again to erase. Castling rights, side to move, en passant, and raw FEN
-  import/export are all exposed.
+- **Chess Helper** (`chess-helper.html`) — set up any position by hand and
+  ask Stockfish 18 for the best move, with a plain-language callout when
+  the best move is a pawn push. Board setup: tap a piece in the palette
+  then tap a square to place it, tap the eraser to remove one, or tap an
+  existing piece to pick it up and tap again to move it (castling drags
+  the rook along automatically). Castling rights, side to move, en
+  passant, raw FEN import/export, and full undo/redo history are all
+  exposed.
+- **Chess Analyst** (`chess-analyst.html`) — enter a chess.com username to
+  pull your recent games from chess.com's public data API, step through
+  them move by move with a `<< < > >>` navigator, and run Stockfish on
+  any position along the way. An optional voice toggle reads moves and
+  analysis results aloud via the browser's speech synthesis.
+
+Shared code (engine loading, chess.js loading, board theming/constants)
+lives under `app/src/main/assets/shared/` and is imported by both pages as
+ES modules.
+
 - Engine: [Stockfish 18](https://github.com/nmrugg/stockfish.js) (lite,
-  single-thread WASM build by Nathan Rugg / Chess.com), fetched from jsdelivr
-  on first run (~7 MB, cached after) — no server-side analysis.
-- Move legality / SAN via [chess.js](https://github.com/jhlywa/chess.js).
+  single-thread WASM build by Nathan Rugg / Chess.com), bundled straight
+  into the APK (`app/src/main/assets/engine/`) so both tools work fully
+  offline — jsdelivr is only ever used as a fallback if that bundled copy
+  is somehow missing.
+- Move legality / SAN / PGN parsing via
+  [chess.js](https://github.com/jhlywa/chess.js), also bundled
+  (`app/src/main/assets/vendor/chess.js`).
 - Best move is drawn as an arrow directly on the board plus a plain-text
-  callout ("move the pawn from e2 to e4").
+  callout.
+- Chess Analyst talks to `api.chess.com/pub/...` (chess.com's public,
+  unauthenticated data API) to list and load games — this only covers
+  *completed* games; chess.com doesn't expose a public API for spectating
+  live in-progress games.
 
 ## Building
 
@@ -32,6 +51,8 @@ to sideload, not intended for the Play Store as-is.
 
 ## Local dev
 
-The web app itself (`app/src/main/assets/chess-helper.html`) is a fully
-standalone HTML file — you can open it directly in any modern desktop or
-mobile browser with no build step at all.
+Each page under `app/src/main/assets/` is a standalone HTML file you can open
+directly in any modern desktop or mobile browser with no build step — just
+keep the folder structure intact (`shared/`, `engine/`, `vendor/` need to sit
+alongside the HTML files) since they're loaded as relative ES module/asset
+paths.

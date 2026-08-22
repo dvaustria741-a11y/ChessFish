@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ChessFish</title>
+<link rel="stylesheet" href="shared/theme.css">
+</head>
+<body>
+
+  <h1>♟ ChessFish</h1>
+  <p class="subtitle">Pick a tool to get started.</p>
+
+  <div class="nav-choice">
+    <button class="nav-card" id="btnGoHelper">
+      <div class="nav-title">Chess Helper</div>
+      <p class="nav-desc">Set up any position by hand and ask Stockfish 18 for the best move — great for puzzles, "what should I have played here" moments, or just exploring ideas.</p>
+    </button>
+
+    <button class="nav-card" id="btnGoAnalyst">
+      <div class="nav-title">Chess Analyst</div>
+      <p class="nav-desc">Enter your chess.com username, pull up your past games, and step through them move by move with Stockfish's take on each position — with optional spoken read-out.</p>
+    </button>
+  </div>
+
+  <footer>
+    Engine: Stockfish 18 (lite, single-thread, WASM) by Nathan Rugg / Chess.com, bundled with the app.<br>
+    Runs fully offline — nothing you set up on the board is ever uploaded.
+  </footer>
+
+<script>
+  document.getElementById('btnGoHelper').addEventListener('click', () => {
+    location.href = 'chess-helper.html';
+  });
+  document.getElementById('btnGoAnalyst').addEventListener('click', () => {
+    location.href = 'chess-analyst.html';
+  });
+</script>
+</body>
+</html>

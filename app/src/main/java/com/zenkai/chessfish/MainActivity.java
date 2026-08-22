@@ -49,7 +49,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient());
 
         setContentView(webView);
-        webView.loadUrl("https://appassets.androidplatform.net/assets/chess-helper.html");
+        webView.loadUrl("https://appassets.androidplatform.net/assets/home.html");
     }
 
     @Override

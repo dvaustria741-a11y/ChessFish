@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>ChessFish — Chess Analyst</title>
+<link rel="stylesheet" href="shared/theme.css">
+</head>
+<body>
+
+  <a class="back-link" href="home.html">&laquo; Back</a>
+  <h1>♟ Chess Analyst</h1>
+  <p class="subtitle">Pull up your chess.com games and step through them with Stockfish 18 — with optional spoken read-out.</p>
+
+  <div class="card">
+    <h2>Load your games</h2>
+    <label class="field">Chess.com username</label>
+    <input type="text" id="usernameInput" placeholder="e.g. hikaru" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <button class="primary" id="btnLoadGames" style="margin-top:10px;">Load games</button>
+    <div id="loadStatus" style="font-size:.82rem;color:var(--ink-dim);min-height:18px;margin-top:8px;font-family:var(--mono);"></div>
+    <div class="game-list" id="gameList"></div>
+  </div>
+
+  <div class="card" id="gameCard" style="display:none;">
+    <h2 id="gameCardTitle">Game</h2>
+    <div class="board-wrap">
+      <div class="board-grid" id="boardGrid"></div>
+      <svg class="arrow-layer" id="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
+        <defs>
+          <marker id="arrowhead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
+            <path d="M0,0 L3,1.5 L0,3 Z" fill="#4f8f6d" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <div class="row hist-row">
+      <button class="action" id="btnFirst" title="Start of game">&laquo;</button>
+      <button class="action" id="btnPrev" title="Previous move">&lsaquo;</button>
+      <button class="action" id="btnNext" title="Next move">&rsaquo;</button>
+      <button class="action" id="btnLast" title="End of game">&raquo;</button>
+    </div>
+
+    <div class="move-strip" id="moveStrip"></div>
+
+    <div class="voice-row">
+      <label><input type="checkbox" id="voiceToggle"> Read moves &amp; analysis aloud</label>
+    </div>
+
+    <div class="think-time-label">Think time <b id="thinkTimeLabel">5 seconds</b></div>
+    <input type="range" id="thinkTime" min="1" max="15" step="1" value="5">
+    <button class="primary" id="btnAnalyze" style="margin-top:12px;">Analyze this position</button>
+    <div id="status"></div>
+
+    <div class="result" id="result">
+      <div class="headline" id="resultHeadline"></div>
+      <div class="eval" id="resultEval"></div>
+      <div class="pv" id="resultPv"></div>
+    </div>
+  </div>
+
+  <footer>
+    Games are pulled straight from chess.com's public data API — nothing you view here is uploaded anywhere.<br>
+    Engine: Stockfish 18 (lite, single-thread, WASM), bundled with the app and running fully offline.
+  </footer>
+
+<script type="module">
+import { FILES, WHITE_GLYPHS, BLACK_GLYPHS } from "./shared/chess-constants.js";
+import { loadChessJs } from "./shared/chess-import.js";
+import { createEngine, parseEval } from "./shared/engine.js";
+
+const Chess = await loadChessJs();
+
+/* ---------- state ---------- */
+let username = '';
+let orientation = 'white';
+let board = {};
+let turn = 'w';
+let plies = [];       // [{fen, san, color}], index 0 = start position (san/color null)
+let currentPly = 0;
+let voiceOn = false;
+
+/* ---------- helpers ---------- */
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function resultFor(game, isWhite){
+  const mine = isWhite ? game.white.result : game.black.result;
+  const theirs = isWhite ? game.black.result : game.white.result;
+  if (mine === 'win') return 'win';
+  if (theirs === 'win') return 'loss';
+  return 'draw';
+}
+function fenToBoardTurn(fen){
+  const [placement, turnField] = fen.trim().split(/\s+/);
+  const rows = placement.split('/');
+  const b = {};
+  for (let r=0;r<8;r++){
+    const rank = 8-r;
+    let file = 0;
+    for (const ch of rows[r]){
+      if (/[1-8]/.test(ch)){ file += parseInt(ch,10); }
+      else { b[FILES[file]+rank] = ch; file++; }
+    }
+  }
+  return { board: b, turn: turnField === 'b' ? 'b' : 'w' };
+}
+
+/* ---------- game list ---------- */
+const usernameInput = document.getElementById('usernameInput');
+const btnLoadGames = document.getElementById('btnLoadGames');
+const loadStatus = document.getElementById('loadStatus');
+const gameList = document.getElementById('gameList');
+const gameCard = document.getElementById('gameCard');
+const gameCardTitle = document.getElementById('gameCardTitle');
+
+function setLoadStatus(msg, isErr){
+  loadStatus.textContent = msg || '';
+  loadStatus.style.color = isErr ? 'var(--danger)' : 'var(--ink-dim)';
+}
+
+btnLoadGames.addEventListener('click', loadGamesList);
+usernameInput.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') loadGamesList(); });
+
+async function loadGamesList(){
+  const uname = usernameInput.value.trim().toLowerCase();
+  if (!uname){ setLoadStatus('Enter a chess.com username.', true); return; }
+  username = uname;
+  gameList.innerHTML = '';
+  gameCard.style.display = 'none';
+  btnLoadGames.disabled = true;
+  setLoadStatus('Looking up archives…');
+  try {
+    const archivesResp = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(uname)}/games/archives`);
+    if (!archivesResp.ok){
+      throw new Error(archivesResp.status === 404 ? 'No such chess.com username.' : `Chess.com returned HTTP ${archivesResp.status}.`);
+    }
+    const archivesData = await archivesResp.json();
+    const archives = archivesData.archives || [];
+    if (!archives.length){
+      setLoadStatus('That account has no games yet.');
+      return;
+    }
+    // Most recent couple of months is plenty for a "recent games" list.
+    const recentArchives = archives.slice(-2).reverse();
+    setLoadStatus('Loading recent games…');
+    let games = [];
+    for (const url of recentArchives){
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      games = games.concat(data.games || []);
+    }
+    games = games
+      .filter(g => g.pgn && (!g.rules || g.rules === 'chess'))
+      .sort((a,b) => (b.end_time||0) - (a.end_time||0))
+      .slice(0, 20);
+    if (!games.length){
+      setLoadStatus('No standard chess games found in the last couple of months.');
+      return;
+    }
+    renderGameList(games);
+    setLoadStatus(`Loaded ${games.length} recent game${games.length===1?'':'s'}. Tap one to open it.`);
+  } catch(err){
+    setLoadStatus('Error: ' + err.message, true);
+  } finally {
+    btnLoadGames.disabled = false;
+  }
+}
+
+function renderGameList(games){
+  gameList.innerHTML = '';
+  for (const game of games){
+    const isWhite = (game.white.username||'').toLowerCase() === username;
+    const opponent = isWhite ? game.black.username : game.white.username;
+    const result = resultFor(game, isWhite);
+    const date = game.end_time ? new Date(game.end_time*1000).toLocaleDateString() : '';
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'game-item';
+    item.innerHTML =
+      `<div class="gi-main">` +
+        `<span class="gi-opp">${isWhite?'White':'Black'} vs ${escapeHtml(opponent||'?')}</span>` +
+        `<span class="gi-meta">${escapeHtml(game.time_class||'')} · ${escapeHtml(date)}</span>` +
+      `</div>` +
+      `<span class="gi-result ${result}">${result.toUpperCase()}</span>`;
+    item.addEventListener('click', () => loadGame(game, isWhite, opponent));
+    gameList.appendChild(item);
+  }
+}
+
+/* ---------- selected game ---------- */
+function loadGame(game, isWhite, opponent){
+  const cleanPgn = (game.pgn||'').replace(/\{[^}]*\}/g, ''); // strip {%clk ...} etc, chess.js doesn't need them
+  let chess;
+  try {
+    chess = new Chess();
+    chess.loadPgn(cleanPgn);
+  } catch(err){
+    setLoadStatus("Could not read that game's moves: " + err.message, true);
+    return;
+  }
+  const moves = chess.history({ verbose: true });
+  const replay = new Chess();
+  plies = [{ fen: replay.fen(), san: null, color: null }];
+  for (const mv of moves){
+    replay.move(mv.san);
+    plies.push({ fen: replay.fen(), san: mv.san, color: mv.color });
+  }
+  orientation = isWhite ? 'white' : 'black';
+  gameCardTitle.textContent = `${isWhite?'White':'Black'} vs ${opponent||'?'}`;
+  gameCard.style.display = 'block';
+  renderMoveStrip();
+  goToPly(0);
+  gameCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ---------- move navigation ---------- */
+const moveStrip = document.getElementById('moveStrip');
+function renderMoveStrip(){
+  moveStrip.innerHTML = '';
+  for (let i=1;i<plies.length;i++){
+    const ply = plies[i];
+    const moveNumber = Math.ceil(i/2);
+    const label = i % 2 === 1 ? `${moveNumber}.${ply.san}` : ply.san;
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'move-chip';
+    chip.dataset.idx = i;
+    chip.textContent = label;
+    chip.addEventListener('click', () => goToPly(i));
+    moveStrip.appendChild(chip);
+  }
+}
+function updateMoveStripHighlight(){
+  moveStrip.querySelectorAll('.move-chip').forEach(el=>{
+    el.classList.toggle('current', Number(el.dataset.idx) === currentPly);
+  });
+  const current = moveStrip.querySelector('.move-chip.current');
+  if (current) current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+}
+function plyLabel(idx){
+  const moveNumber = Math.ceil(idx/2);
+  return idx % 2 === 1 ? `Move ${moveNumber}, White` : `Move ${moveNumber}, Black`;
+}
+function updateNavButtons(){
+  const atStart = currentPly <= 0;
+  const atEnd = currentPly >= plies.length-1;
+  document.getElementById('btnFirst').disabled = atStart;
+  document.getElementById('btnPrev').disabled = atStart;
+  document.getElementById('btnNext').disabled = atEnd;
+  document.getElementById('btnLast').disabled = atEnd;
+}
+document.getElementById('btnFirst').addEventListener('click', ()=>goToPly(0));
+document.getElementById('btnPrev').addEventListener('click', ()=>goToPly(currentPly-1));
+document.getElementById('btnNext').addEventListener('click', ()=>goToPly(currentPly+1));
+document.getElementById('btnLast').addEventListener('click', ()=>goToPly(plies.length-1));
+
+function goToPly(idx){
+  idx = Math.max(0, Math.min(plies.length-1, idx));
+  currentPly = idx;
+  const parsed = fenToBoardTurn(plies[idx].fen);
+  board = parsed.board;
+  turn = parsed.turn;
+  clearHighlights();
+  resultBox.classList.remove('show');
+  setStatus('');
+  renderBoard();
+  updateMoveStripHighlight();
+  updateNavButtons();
+  const ply = plies[idx];
+  if (voiceOn){
+    speak(ply.san ? `${plyLabel(idx)}: ${ply.san}` : 'Start of game.');
+  }
+}
+
+/* ---------- board rendering (read-only) ---------- */
+function squareGridPos(square){
+  let col = FILES.indexOf(square[0]);
+  let row = 8 - parseInt(square[1],10);
+  if (orientation === 'black'){ col = 7-col; row = 7-row; }
+  return {row,col};
+}
+function gridPosToSquare(row,col){
+  let f = col, r = row;
+  if (orientation === 'black'){ f = 7-col; r = 7-row; }
+  const rank = 8-r;
+  return FILES[f]+rank;
+}
+const boardGrid = document.getElementById('boardGrid');
+function renderBoard(){
+  boardGrid.innerHTML = '';
+  for (let row=0; row<8; row++){
+    for (let col=0; col<8; col++){
+      const square = gridPosToSquare(row,col);
+      const file = FILES.indexOf(square[0]);
+      const rank = parseInt(square[1],10);
+      const isDark = (file + (rank-1)) % 2 === 0;
+      const div = document.createElement('div');
+      div.className = 'square ' + (isDark ? 'dark' : 'light');
+      div.dataset.square = square;
+      const piece = board[square];
+      if (piece){
+        const span = document.createElement('span');
+        const isWhite = piece === piece.toUpperCase();
+        span.className = 'piece ' + (isWhite ? 'white' : 'black');
+        span.textContent = isWhite ? WHITE_GLYPHS[piece] : BLACK_GLYPHS[piece];
+        div.appendChild(span);
+      }
+      if (row === 7){
+        const lab = document.createElement('span');
+        lab.className = 'coord file'; lab.textContent = square[0];
+        div.appendChild(lab);
+      }
+      if (col === 0){
+        const lab = document.createElement('span');
+        lab.className = 'coord rank'; lab.textContent = square[1];
+        div.appendChild(lab);
+      }
+      boardGrid.appendChild(div);
+    }
+  }
+}
+
+/* ---------- highlight / arrow ---------- */
+const arrowLayer = document.getElementById('arrowLayer');
+function clearHighlights(){
+  document.querySelectorAll('.square.from,.square.to').forEach(el=>{el.classList.remove('from');el.classList.remove('to');});
+  const oldLine = arrowLayer.querySelector('line');
+  if (oldLine) oldLine.remove();
+}
+function highlightMove(from,to){
+  clearHighlights();
+  const fromEl = boardGrid.querySelector(`[data-square="${from}"]`);
+  const toEl = boardGrid.querySelector(`[data-square="${to}"]`);
+  if (fromEl) fromEl.classList.add('from');
+  if (toEl) toEl.classList.add('to');
+  const a = squareGridPos(from), b = squareGridPos(to);
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('x1', a.col+0.5); line.setAttribute('y1', a.row+0.5);
+  line.setAttribute('x2', b.col+0.5); line.setAttribute('y2', b.row+0.5);
+  line.setAttribute('stroke', '#4f8f6d'); line.setAttribute('stroke-width', '0.16');
+  line.setAttribute('stroke-linecap','round'); line.setAttribute('marker-end','url(#arrowhead)');
+  arrowLayer.appendChild(line);
+}
+
+/* ---------- voice ---------- */
+const voiceToggle = document.getElementById('voiceToggle');
+voiceToggle.addEventListener('change', ()=>{
+  voiceOn = voiceToggle.checked;
+  if (!voiceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+});
+function speak(text){
+  if (!voiceOn || !('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(new SpeechSynthesisUtterance(text));
+}
+
+/* ---------- status ---------- */
+const statusEl = document.getElementById('status');
+function setStatus(msg, isErr){ statusEl.textContent = msg||''; statusEl.classList.toggle('err', !!isErr); }
+
+/* ---------- engine ---------- */
+const engine = createEngine(setStatus);
+
+const thinkTime = document.getElementById('thinkTime');
+const thinkTimeLabel = document.getElementById('thinkTimeLabel');
+thinkTime.addEventListener('input', ()=>{ thinkTimeLabel.textContent = thinkTime.value + ' second' + (thinkTime.value==='1'?'':'s'); });
+
+const resultBox = document.getElementById('result');
+const resultHeadline = document.getElementById('resultHeadline');
+const resultEval = document.getElementById('resultEval');
+const resultPv = document.getElementById('resultPv');
+const btnAnalyze = document.getElementById('btnAnalyze');
+
+btnAnalyze.addEventListener('click', async () => {
+  clearHighlights();
+  resultBox.classList.remove('show');
+  const fen = plies[currentPly].fen;
+  btnAnalyze.disabled = true;
+  try{
+    await engine.init();
+    const movetimeMs = parseInt(thinkTime.value,10) * 1000;
+    setStatus('Thinking…');
+    const { bestMove, lastInfo } = await engine.analyze(fen, movetimeMs, (depth)=> setStatus(`Thinking… depth ${depth}`));
+    if (!bestMove || bestMove === '(none)'){
+      setStatus('No legal moves in this position (checkmate or stalemate).', true);
+      return;
+    }
+    const from = bestMove.slice(0,2);
+    const to = bestMove.slice(2,4);
+    const promotion = bestMove.length > 4 ? bestMove[4] : undefined;
+
+    const chessForMove = new Chess(fen);
+    const moveObj = chessForMove.move({ from, to, promotion });
+    if (!moveObj){
+      setStatus('Engine returned a move chess.js could not apply: ' + bestMove, true);
+      return;
+    }
+
+    const colorWord = moveObj.color === 'w' ? 'White' : 'Black';
+    resultHeadline.textContent = `${colorWord} to play: ${moveObj.san}`;
+    const evalInfo = parseEval(lastInfo, turn);
+    resultEval.textContent = evalInfo ? evalInfo.text : '';
+    resultPv.textContent = evalInfo && evalInfo.pv ? ('Principal line: ' + evalInfo.pv) : '';
+
+    highlightMove(from, to);
+    resultBox.classList.add('show');
+    setStatus(`Done (${(movetimeMs/1000).toFixed(0)}s search).`);
+    speak(`${colorWord} to play: ${moveObj.san}. ${evalInfo ? evalInfo.text : ''}`);
+  }catch(err){
+    setStatus('Error: ' + err.message, true);
+  }finally{
+    btnAnalyze.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
