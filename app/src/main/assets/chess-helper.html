@@ -94,7 +94,7 @@
   </footer>
 
 <script type="module">
-import { FILES, WHITE_GLYPHS, BLACK_GLYPHS, PIECE_NAMES, START_FEN } from "./shared/chess-constants.js";
+import { FILES, WHITE_GLYPHS, BLACK_GLYPHS, PIECE_NAMES, START_FEN, pieceImgSrc } from "./shared/chess-constants.js";
 import { loadChessJs } from "./shared/chess-import.js";
 import { createEngine, parseEval } from "./shared/engine.js";
 
@@ -232,11 +232,13 @@ function renderBoard(){
       div.dataset.square = square;
       const piece = board[square];
       if (piece){
-        const span = document.createElement('span');
+        const img = document.createElement('img');
         const isWhite = piece === piece.toUpperCase();
-        span.className = 'piece ' + (isWhite ? 'white' : 'black');
-        span.textContent = isWhite ? WHITE_GLYPHS[piece] : BLACK_GLYPHS[piece];
-        div.appendChild(span);
+        img.className = 'piece ' + (isWhite ? 'white' : 'black');
+        img.src = pieceImgSrc(piece);
+        img.draggable = false;
+        img.alt = piece;
+        div.appendChild(img);
       }
       if (row === 7){
         const lab = document.createElement('span');
@@ -306,13 +308,19 @@ const paletteBlack = document.getElementById('paletteBlack');
 function buildPalette(){
   ['K','Q','R','B','N','P'].forEach(p=>{
     const btn = document.createElement('button');
-    btn.className = 'pal-btn white'; btn.textContent = WHITE_GLYPHS[p]; btn.dataset.piece = p;
+    btn.className = 'pal-btn white'; btn.dataset.piece = p;
+    const img = document.createElement('img');
+    img.src = pieceImgSrc(p); img.draggable = false; img.alt = p;
+    btn.appendChild(img);
     btn.addEventListener('click', ()=>selectTool(p, btn));
     paletteWhite.appendChild(btn);
   });
   ['k','q','r','b','n','p'].forEach(p=>{
     const btn = document.createElement('button');
-    btn.className = 'pal-btn black'; btn.textContent = BLACK_GLYPHS[p]; btn.dataset.piece = p;
+    btn.className = 'pal-btn black'; btn.dataset.piece = p;
+    const img = document.createElement('img');
+    img.src = pieceImgSrc(p); img.draggable = false; img.alt = p;
+    btn.appendChild(img);
     btn.addEventListener('click', ()=>selectTool(p, btn));
     paletteBlack.appendChild(btn);
   });

@@ -65,7 +65,7 @@
   </footer>
 
 <script type="module">
-import { FILES, WHITE_GLYPHS, BLACK_GLYPHS } from "./shared/chess-constants.js";
+import { FILES, WHITE_GLYPHS, BLACK_GLYPHS, pieceImgSrc } from "./shared/chess-constants.js";
 import { loadChessJs } from "./shared/chess-import.js";
 import { createEngine, parseEval } from "./shared/engine.js";
 
@@ -301,11 +301,13 @@ function renderBoard(){
       div.dataset.square = square;
       const piece = board[square];
       if (piece){
-        const span = document.createElement('span');
+        const img = document.createElement('img');
         const isWhite = piece === piece.toUpperCase();
-        span.className = 'piece ' + (isWhite ? 'white' : 'black');
-        span.textContent = isWhite ? WHITE_GLYPHS[piece] : BLACK_GLYPHS[piece];
-        div.appendChild(span);
+        img.className = 'piece ' + (isWhite ? 'white' : 'black');
+        img.src = pieceImgSrc(piece);
+        img.draggable = false;
+        img.alt = piece;
+        div.appendChild(img);
       }
       if (row === 7){
         const lab = document.createElement('span');
