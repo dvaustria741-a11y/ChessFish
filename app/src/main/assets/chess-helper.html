@@ -40,6 +40,7 @@
   .square .piece{font-size:min(7.5vw,34px);line-height:1;pointer-events:none;transition:transform .1s;}
   .square.from{outline:3px solid var(--from-sq);outline-offset:-3px;}
   .square.to{outline:3px solid var(--to-sq);outline-offset:-3px;}
+  .square.picked{outline:3px dashed var(--gold);outline-offset:-3px;}
   .piece.white{color:#fbf6ea;text-shadow:0 0 1.5px #000,0 0 2px #000, 0 1px 1px rgba(0,0,0,.6);}
   .piece.black{color:#1a1410;text-shadow:0 0 1px rgba(255,255,255,.35);}
   .coord{position:absolute;font-family:var(--mono);font-size:9px;color:#00000066;pointer-events:none;}
@@ -213,6 +214,7 @@ let castle = {K:true,Q:true,k:true,q:true};
 let ep = '-';
 let halfmove = 0, fullmove = 1;
 let selectedTool = null; // piece char or 'erase' or null
+let pickedUpSquare = null; // square whose piece is currently picked up for a tap-to-move
 let lastResult = null;   // {from,to,promotion,fenBefore}
 
 /* ---------- undo / redo history ---------- */
@@ -245,6 +247,7 @@ function goToHistory(index){
   if (index === historyIndex) return;
   historyIndex = index;
   restoreSnapshot(history[historyIndex]);
+  pickedUpSquare = null;
   document.getElementById('epField').value = ep;
   syncCastleUI();
   setTurnUI(turn);
@@ -331,7 +334,7 @@ function renderBoard(){
       const rank = parseInt(square[1],10);
       const isDark = (file + (rank-1)) % 2 === 0;
       const div = document.createElement('div');
-      div.className = 'square ' + (isDark ? 'dark' : 'light');
+      div.className = 'square ' + (isDark ? 'dark' : 'light') + (square === pickedUpSquare ? ' picked' : '');
       div.dataset.square = square;
       const piece = board[square];
       if (piece){
@@ -361,16 +364,31 @@ function renderBoard(){
 
 function onSquareClick(square){
   if (selectedTool === 'erase'){
+    pickedUpSquare = null;
     if (!board[square]) return; // nothing to erase
     delete board[square];
   } else if (selectedTool){
+    pickedUpSquare = null;
     board[square] = selectedTool;
-  } else {
-    // No tool selected: tapping the board does nothing on its own — this
-    // used to silently delete whatever piece was there, which felt like
-    // pieces vanishing at random. Pick a piece from the palette, or tap
-    // the ✕ eraser, to make a change.
+  } else if (pickedUpSquare){
+    // Second tap: drop the picked-up piece here (tap the same square to cancel).
+    if (square === pickedUpSquare){
+      pickedUpSquare = null;
+      renderBoard();
+      return;
+    }
+    const piece = board[pickedUpSquare];
+    delete board[pickedUpSquare];
+    board[square] = piece;
+    pickedUpSquare = null;
+  } else if (board[square]){
+    // First tap on an occupied square with no palette tool selected: pick it
+    // up so the next tap moves it. Tap it again to put it back down.
+    pickedUpSquare = square;
+    renderBoard();
     return;
+  } else {
+    return; // empty square, nothing selected — nothing to do
   }
   renderBoard();
   pushHistory();
@@ -399,6 +417,7 @@ function buildPalette(){
   paletteBlack.appendChild(eraseBtn);
 }
 function selectTool(tool, btnEl){
+  pickedUpSquare = null;
   document.querySelectorAll('.pal-btn').forEach(b=>b.classList.remove('active'));
   if (selectedTool === tool){ selectedTool = null; }
   else { selectedTool = tool; btnEl.classList.add('active'); }
@@ -433,6 +452,7 @@ document.getElementById('btnSyncFen').addEventListener('click', syncFenBox);
 document.getElementById('btnLoadFen').addEventListener('click', ()=>{
   try{
     parseFenToState(fenBox.value);
+    pickedUpSquare = null;
     document.getElementById('epField').value = ep;
     document.getElementById('cK').checked = castle.K;
     document.getElementById('cQ').checked = castle.Q;
@@ -453,8 +473,8 @@ document.getElementById('btnCopyFen').addEventListener('click', async ()=>{
 });
 
 /* ---------- setup controls ---------- */
-document.getElementById('btnStart').addEventListener('click', ()=>{ parseFenToState(START_FEN); setTurnUI(turn); syncCastleUI(); renderBoard(); pushHistory(); });
-document.getElementById('btnClear').addEventListener('click', ()=>{ board = {}; renderBoard(); pushHistory(); });
+document.getElementById('btnStart').addEventListener('click', ()=>{ pickedUpSquare = null; parseFenToState(START_FEN); setTurnUI(turn); syncCastleUI(); renderBoard(); pushHistory(); });
+document.getElementById('btnClear').addEventListener('click', ()=>{ pickedUpSquare = null; board = {}; renderBoard(); pushHistory(); });
 document.getElementById('btnFlip').addEventListener('click', ()=>{ orientation = orientation==='white' ? 'black' : 'white'; renderBoard(); });
 
 function setTurnUI(t){
