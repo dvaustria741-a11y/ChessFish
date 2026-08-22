@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Zenkai Chess Helper — Stockfish</title>
+<style>
+  :root{
+    --bg:#14110e;
+    --panel:#1d1812;
+    --panel-2:#241d15;
+    --line:#3a2f22;
+    --parchment:#e8dcc3;
+    --walnut:#7c6a4f;
+    --gold:#c9a24a;
+    --gold-dim:#8a7238;
+    --ink:#f2ead9;
+    --ink-dim:#b8ac93;
+    --from-sq:#c9a24a99;
+    --to-sq:#4f8f6dcc;
+    --danger:#c96a4a;
+    --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+    --serif: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:var(--sans);}
+  body{padding:16px 14px 60px;max-width:520px;margin:0 auto;}
+  h1{font-family:var(--serif);font-size:1.5rem;font-weight:700;letter-spacing:.01em;margin:4px 0 2px;color:var(--parchment);}
+  .subtitle{color:var(--ink-dim);font-size:.85rem;margin:0 0 18px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px;}
+  .card h2{font-family:var(--serif);font-size:1rem;margin:0 0 10px;color:var(--gold);font-weight:600;letter-spacing:.02em;text-transform:uppercase;font-size:.78rem;}
+
+  /* Board */
+  .board-wrap{position:relative;width:100%;aspect-ratio:1/1;user-select:none;-webkit-user-select:none;}
+  .board-grid{position:absolute;inset:0;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:2px solid var(--walnut);border-radius:4px;overflow:hidden;}
+  .square{position:relative;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+  .square.light{background:var(--parchment);}
+  .square.dark{background:var(--walnut);}
+  .square .piece{font-size:min(7.5vw,34px);line-height:1;pointer-events:none;transition:transform .1s;}
+  .square.from{outline:3px solid var(--from-sq);outline-offset:-3px;}
+  .square.to{outline:3px solid var(--to-sq);outline-offset:-3px;}
+  .piece.white{color:#fbf6ea;text-shadow:0 0 1.5px #000,0 0 2px #000, 0 1px 1px rgba(0,0,0,.6);}
+  .piece.black{color:#1a1410;text-shadow:0 0 1px rgba(255,255,255,.35);}
+  .coord{position:absolute;font-family:var(--mono);font-size:9px;color:#00000066;pointer-events:none;}
+  .square.light .coord{color:#00000055;}
+  .square.dark .coord{color:#ffffff55;}
+  .coord.file{bottom:1px;right:2px;}
+  .coord.rank{top:1px;left:2px;}
+  svg.arrow-layer{position:absolute;inset:0;pointer-events:none;}
+
+  /* Palette */
+  .palette{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px;}
+  .pal-btn{width:40px;height:40px;border-radius:8px;border:1px solid var(--line);background:var(--panel-2);font-size:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--ink);}
+  .pal-btn.white{color:#fbf6ea;text-shadow:0 0 1px #000,0 0 2px #000;}
+  .pal-btn.black{color:#1a1410;}
+  .pal-btn.active{border-color:var(--gold);box-shadow:0 0 0 2px var(--gold-dim) inset;}
+  .pal-btn.erase{font-size:16px;font-family:var(--sans);color:var(--danger);font-weight:700;}
+
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
+  button.action{flex:1;min-width:120px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:9px 10px;border-radius:8px;font-size:.85rem;cursor:pointer;}
+  button.action:active{background:var(--line);}
+  button.primary{background:var(--gold);color:#1a1410;border:none;font-weight:700;font-size:.95rem;padding:12px;flex:1 1 100%;border-radius:9px;}
+  button.primary:disabled{opacity:.5;}
+  button.primary:active{background:var(--gold-dim);}
+  button.link{background:none;border:none;color:var(--gold);text-decoration:underline;font-size:.8rem;cursor:pointer;padding:2px 0;}
+
+  /* toggles */
+  .toggle-group{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;}
+  .toggle-group button{flex:1;background:var(--panel-2);color:var(--ink-dim);border:none;padding:9px;font-size:.85rem;cursor:pointer;}
+  .toggle-group button.selected{background:var(--gold);color:#1a1410;font-weight:700;}
+
+  label.field{display:block;font-size:.78rem;color:var(--ink-dim);margin-top:10px;margin-bottom:4px;}
+  input[type=text], textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);border-radius:8px;padding:8px;font-family:var(--mono);font-size:.8rem;}
+  textarea{resize:vertical;min-height:44px;}
+  .castling-boxes{display:flex;gap:14px;margin-top:8px;flex-wrap:wrap;}
+  .castling-boxes label{display:flex;align-items:center;gap:5px;font-size:.85rem;color:var(--ink-dim);}
+
+  input[type=range]{width:100%;accent-color:var(--gold);}
+  .think-time-label{display:flex;justify-content:space-between;font-size:.82rem;color:var(--ink-dim);}
+  .think-time-label b{color:var(--parchment);}
+
+  #status{font-size:.82rem;color:var(--ink-dim);min-height:18px;margin-top:8px;font-family:var(--mono);}
+  #status.err{color:var(--danger);}
+
+  .result{display:none;}
+  .result.show{display:block;}
+  .result .headline{font-family:var(--serif);font-size:1.2rem;color:var(--parchment);margin-bottom:4px;}
+  .result .pawn-callout{background:#4f8f6d22;border:1px solid #4f8f6d55;color:#a9d9bd;padding:8px 10px;border-radius:8px;font-size:.88rem;margin:8px 0;}
+  .result .eval{font-family:var(--mono);font-size:.85rem;color:var(--ink-dim);}
+  .result .pv{font-family:var(--mono);font-size:.75rem;color:var(--ink-dim);margin-top:6px;word-break:break-all;}
+
+  footer{color:var(--ink-dim);font-size:.72rem;text-align:center;margin-top:8px;line-height:1.5;}
+</style>
+</head>
+<body>
+
+  <h1>♟ Chess Best-Move Helper</h1>
+  <p class="subtitle">Set up any position, run real Stockfish 18 in your browser, see exactly where the engine wants you to move — pawn included.</p>
+
+  <div class="card">
+    <h2>Board</h2>
+    <div class="board-wrap">
+      <div class="board-grid" id="boardGrid"></div>
+      <svg class="arrow-layer" id="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
+        <defs>
+          <marker id="arrowhead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
+            <path d="M0,0 L3,1.5 L0,3 Z" fill="#4f8f6d" />
+          </marker>
+        </defs>
+      </svg>
+    </div>
+
+    <div class="palette" id="paletteWhite"></div>
+    <div class="palette" id="paletteBlack"></div>
+
+    <div class="row">
+      <button class="action" id="btnStart">Standard start</button>
+      <button class="action" id="btnClear">Clear board</button>
+      <button class="action" id="btnFlip">Flip board</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Position</h2>
+    <label class="field">Side to move</label>
+    <div class="toggle-group">
+      <button id="btnWhiteMove" class="selected">White</button>
+      <button id="btnBlackMove">Black</button>
+    </div>
+
+    <label class="field">Castling rights</label>
+    <div class="castling-boxes">
+      <label><input type="checkbox" id="cK" checked> K</label>
+      <label><input type="checkbox" id="cQ" checked> Q</label>
+      <label><input type="checkbox" id="ck" checked> k</label>
+      <label><input type="checkbox" id="cq" checked> q</label>
+    </div>
+
+    <label class="field">En passant target square (or -)</label>
+    <input type="text" id="epField" value="-" maxlength="2">
+
+    <label class="field">FEN <button class="link" id="btnSyncFen" style="float:right">sync from board</button></label>
+    <textarea id="fenBox" spellcheck="false"></textarea>
+    <div class="row">
+      <button class="action" id="btnLoadFen">Load this FEN</button>
+      <button class="action" id="btnCopyFen">Copy FEN</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Engine — Stockfish 18</h2>
+    <div class="think-time-label">Think time <b id="thinkTimeLabel">5 seconds</b></div>
+    <input type="range" id="thinkTime" min="1" max="15" step="1" value="5">
+    <button class="primary" id="btnCalc" style="margin-top:12px;">Calculate best move</button>
+    <div id="status"></div>
+
+    <div class="result" id="result">
+      <div class="headline" id="resultHeadline"></div>
+      <div class="pawn-callout" id="pawnCallout" style="display:none;"></div>
+      <div class="eval" id="resultEval"></div>
+      <div class="pv" id="resultPv"></div>
+      <div class="row">
+        <button class="action" id="btnPlayMove">Play this move on the board</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    Engine: Stockfish 18 (lite, single-thread, WASM) by Nathan Rugg / Chess.com, loaded live from jsdelivr.<br>
+    Rules &amp; SAN via chess.js. Nothing here is uploaded anywhere — it all runs locally in this tab.
+  </footer>
+
+<script type="module">
+import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js";
+
+/* ---------- constants ---------- */
+const FILES = ['a','b','c','d','e','f','g','h'];
+const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+const SF_VERSION = "18.0.8";
+const SF_BASE = `https://cdn.jsdelivr.net/npm/stockfish@${SF_VERSION}/bin/`;
+const SF_JS = SF_BASE + "stockfish-18-lite-single.js";
+const SF_WASM = SF_BASE + "stockfish-18-lite-single.wasm";
+
+const WHITE_GLYPHS = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙'};
+const BLACK_GLYPHS = {k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
+const PIECE_NAMES = {p:'pawn',n:'knight',b:'bishop',r:'rook',q:'queen',k:'king'};
+
+/* ---------- state ---------- */
+let board = {};      // square -> piece char
+let orientation = 'white';
+let turn = 'w';
+let castle = {K:true,Q:true,k:true,q:true};
+let ep = '-';
+let halfmove = 0, fullmove = 1;
+let selectedTool = null; // piece char or 'erase' or null
+let lastResult = null;   // {from,to,promotion,fenBefore}
+
+function parseFenToState(fen){
+  const parts = fen.trim().split(/\s+/);
+  if (parts.length < 4) throw new Error("FEN needs at least placement, turn, castling and en-passant fields.");
+  const [placement, turnField, castleField, epField, half, full] = parts;
+  const rows = placement.split('/');
+  if (rows.length !== 8) throw new Error("FEN placement must have 8 ranks separated by '/'.");
+  const newBoard = {};
+  for (let r=0;r<8;r++){
+    const rank = 8-r;
+    let file = 0;
+    for (const ch of rows[r]){
+      if (/[1-8]/.test(ch)){ file += parseInt(ch,10); }
+      else {
+        if (file>7) throw new Error(`Rank ${rank} has too many squares.`);
+        newBoard[FILES[file]+rank] = ch;
+        file++;
+      }
+    }
+    if (file !== 8) throw new Error(`Rank ${rank} does not add up to 8 squares.`);
+  }
+  board = newBoard;
+  turn = turnField === 'b' ? 'b' : 'w';
+  castle = {K:castleField.includes('K'),Q:castleField.includes('Q'),k:castleField.includes('k'),q:castleField.includes('q')};
+  ep = epField || '-';
+  halfmove = parseInt(half,10) || 0;
+  fullmove = parseInt(full,10) || 1;
+}
+
+function stateToFen(){
+  const rows = [];
+  for (let r=0;r<8;r++){
+    const rank = 8-r;
+    let row = '', empty = 0;
+    for (const file of FILES){
+      const p = board[file+rank];
+      if (!p) empty++;
+      else { if (empty){row+=empty;empty=0;} row+=p; }
+    }
+    if (empty) row += empty;
+    rows.push(row);
+  }
+  let c = '';
+  if (castle.K) c+='K'; if (castle.Q) c+='Q'; if (castle.k) c+='k'; if (castle.q) c+='q';
+  if (!c) c = '-';
+  return `${rows.join('/')} ${turn} ${c} ${ep||'-'} ${halfmove} ${fullmove}`;
+}
+
+/* ---------- rendering ---------- */
+function squareGridPos(square){
+  let col = FILES.indexOf(square[0]);
+  let row = 8 - parseInt(square[1],10);
+  if (orientation === 'black'){ col = 7-col; row = 7-row; }
+  return {row,col};
+}
+function gridPosToSquare(row,col){
+  let f = col, r = row;
+  if (orientation === 'black'){ f = 7-col; r = 7-row; }
+  const rank = 8-r;
+  return FILES[f]+rank;
+}
+
+const boardGrid = document.getElementById('boardGrid');
+function renderBoard(){
+  boardGrid.innerHTML = '';
+  for (let row=0; row<8; row++){
+    for (let col=0; col<8; col++){
+      const square = gridPosToSquare(row,col);
+      const file = FILES.indexOf(square[0]);
+      const rank = parseInt(square[1],10);
+      const isDark = (file + (rank-1)) % 2 === 0;
+      const div = document.createElement('div');
+      div.className = 'square ' + (isDark ? 'dark' : 'light');
+      div.dataset.square = square;
+      const piece = board[square];
+      if (piece){
+        const span = document.createElement('span');
+        const isWhite = piece === piece.toUpperCase();
+        span.className = 'piece ' + (isWhite ? 'white' : 'black');
+        span.textContent = isWhite ? WHITE_GLYPHS[piece] : BLACK_GLYPHS[piece];
+        div.appendChild(span);
+      }
+      if (row === 7){
+        const lab = document.createElement('span');
+        lab.className = 'coord file'; lab.textContent = square[0];
+        div.appendChild(lab);
+      }
+      if (col === 0){
+        const lab = document.createElement('span');
+        lab.className = 'coord rank'; lab.textContent = square[1];
+        div.appendChild(lab);
+      }
+      div.addEventListener('click', () => onSquareClick(square));
+      boardGrid.appendChild(div);
+    }
+  }
+  syncFenBox();
+  clearHighlights();
+}
+
+function onSquareClick(square){
+  if (selectedTool === 'erase'){
+    delete board[square];
+  } else if (selectedTool){
+    board[square] = selectedTool;
+  } else {
+    if (board[square]) delete board[square];
+    else return; // nothing to do, no tool selected and square empty
+  }
+  renderBoard();
+}
+
+/* ---------- palette ---------- */
+const paletteWhite = document.getElementById('paletteWhite');
+const paletteBlack = document.getElementById('paletteBlack');
+function buildPalette(){
+  ['K','Q','R','B','N','P'].forEach(p=>{
+    const btn = document.createElement('button');
+    btn.className = 'pal-btn white'; btn.textContent = WHITE_GLYPHS[p]; btn.dataset.piece = p;
+    btn.addEventListener('click', ()=>selectTool(p, btn));
+    paletteWhite.appendChild(btn);
+  });
+  ['k','q','r','b','n','p'].forEach(p=>{
+    const btn = document.createElement('button');
+    btn.className = 'pal-btn black'; btn.textContent = BLACK_GLYPHS[p]; btn.dataset.piece = p;
+    btn.addEventListener('click', ()=>selectTool(p, btn));
+    paletteBlack.appendChild(btn);
+  });
+  const eraseBtn = document.createElement('button');
+  eraseBtn.className = 'pal-btn erase'; eraseBtn.textContent = '✕';
+  eraseBtn.title = 'Erase';
+  eraseBtn.addEventListener('click', ()=>selectTool('erase', eraseBtn));
+  paletteBlack.appendChild(eraseBtn);
+}
+function selectTool(tool, btnEl){
+  document.querySelectorAll('.pal-btn').forEach(b=>b.classList.remove('active'));
+  if (selectedTool === tool){ selectedTool = null; }
+  else { selectedTool = tool; btnEl.classList.add('active'); }
+}
+
+/* ---------- highlights / arrow ---------- */
+const arrowLayer = document.getElementById('arrowLayer');
+function clearHighlights(){
+  document.querySelectorAll('.square.from,.square.to').forEach(el=>{el.classList.remove('from');el.classList.remove('to');});
+  const oldLine = arrowLayer.querySelector('line');
+  if (oldLine) oldLine.remove();
+}
+function highlightMove(from,to){
+  clearHighlights();
+  const fromEl = boardGrid.querySelector(`[data-square="${from}"]`);
+  const toEl = boardGrid.querySelector(`[data-square="${to}"]`);
+  if (fromEl) fromEl.classList.add('from');
+  if (toEl) toEl.classList.add('to');
+  const a = squareGridPos(from), b = squareGridPos(to);
+  const line = document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('x1', a.col+0.5); line.setAttribute('y1', a.row+0.5);
+  line.setAttribute('x2', b.col+0.5); line.setAttribute('y2', b.row+0.5);
+  line.setAttribute('stroke', '#4f8f6d'); line.setAttribute('stroke-width', '0.16');
+  line.setAttribute('stroke-linecap','round'); line.setAttribute('marker-end','url(#arrowhead)');
+  arrowLayer.appendChild(line);
+}
+
+/* ---------- FEN box wiring ---------- */
+const fenBox = document.getElementById('fenBox');
+function syncFenBox(){ fenBox.value = stateToFen(); }
+document.getElementById('btnSyncFen').addEventListener('click', syncFenBox);
+document.getElementById('btnLoadFen').addEventListener('click', ()=>{
+  try{
+    parseFenToState(fenBox.value);
+    document.getElementById('epField').value = ep;
+    document.getElementById('cK').checked = castle.K;
+    document.getElementById('cQ').checked = castle.Q;
+    document.getElementById('ck').checked = castle.k;
+    document.getElementById('cq').checked = castle.q;
+    setTurnUI(turn);
+    renderBoard();
+    setStatus('FEN loaded.');
+  }catch(err){
+    setStatus('FEN error: ' + err.message, true);
+  }
+});
+document.getElementById('btnCopyFen').addEventListener('click', async ()=>{
+  syncFenBox();
+  try{ await navigator.clipboard.writeText(fenBox.value); setStatus('FEN copied to clipboard.'); }
+  catch{ fenBox.select(); setStatus('Select-all done — copy manually.'); }
+});
+
+/* ---------- setup controls ---------- */
+document.getElementById('btnStart').addEventListener('click', ()=>{ parseFenToState(START_FEN); setTurnUI(turn); syncCastleUI(); renderBoard(); });
+document.getElementById('btnClear').addEventListener('click', ()=>{ board = {}; renderBoard(); });
+document.getElementById('btnFlip').addEventListener('click', ()=>{ orientation = orientation==='white' ? 'black' : 'white'; renderBoard(); });
+
+function setTurnUI(t){
+  turn = t;
+  document.getElementById('btnWhiteMove').classList.toggle('selected', t==='w');
+  document.getElementById('btnBlackMove').classList.toggle('selected', t==='b');
+}
+document.getElementById('btnWhiteMove').addEventListener('click', ()=>{setTurnUI('w'); syncFenBox();});
+document.getElementById('btnBlackMove').addEventListener('click', ()=>{setTurnUI('b'); syncFenBox();});
+function syncCastleUI(){
+  document.getElementById('cK').checked = castle.K;
+  document.getElementById('cQ').checked = castle.Q;
+  document.getElementById('ck').checked = castle.k;
+  document.getElementById('cq').checked = castle.q;
+}
+['cK','cQ','ck','cq'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', (e)=>{
+    const key = id.slice(1);
+    castle[key] = e.target.checked;
+    syncFenBox();
+  });
+});
+document.getElementById('epField').addEventListener('input', (e)=>{ ep = e.target.value.trim() || '-'; syncFenBox(); });
+
+/* ---------- think time ---------- */
+const thinkTime = document.getElementById('thinkTime');
+const thinkTimeLabel = document.getElementById('thinkTimeLabel');
+thinkTime.addEventListener('input', ()=>{ thinkTimeLabel.textContent = thinkTime.value + ' second' + (thinkTime.value==='1'?'':'s'); });
+
+/* ---------- status ---------- */
+const statusEl = document.getElementById('status');
+function setStatus(msg, isErr){ statusEl.textContent = msg||''; statusEl.classList.toggle('err', !!isErr); }
+
+/* ---------- engine ---------- */
+let engineWorker = null;
+let engineReadyPromise = null;
+
+function initEngine(){
+  if (engineReadyPromise) return engineReadyPromise;
+  engineReadyPromise = (async () => {
+    setStatus('Downloading Stockfish (~7 MB, first run only)…');
+    const resp = await fetch(SF_JS);
+    if (!resp.ok) throw new Error(`Could not fetch engine script (HTTP ${resp.status}). Check your connection.`);
+    const code = await resp.text();
+    const blob = new Blob([code], { type: 'application/javascript' });
+    const blobUrl = URL.createObjectURL(blob);
+    const worker = new Worker(blobUrl + '#' + encodeURIComponent(SF_WASM));
+    engineWorker = worker;
+    setStatus('Starting engine…');
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(()=>reject(new Error('Engine did not respond in time (uciok timeout).')), 30000);
+      function handler(e){
+        const line = e.data;
+        if (typeof line === 'string' && line.trim() === 'uciok'){
+          worker.removeEventListener('message', handler);
+          clearTimeout(timeout);
+          resolve();
+        }
+      }
+      worker.addEventListener('message', handler);
+      worker.onerror = (err) => { clearTimeout(timeout); reject(new Error('Engine worker error: ' + (err.message||'unknown'))); };
+      worker.postMessage('uci');
+    });
+    setStatus('Engine ready.');
+    return worker;
+  })();
+  return engineReadyPromise;
+}
+
+function analyzePosition(fen, movetimeMs){
+  return new Promise((resolve, reject) => {
+    const worker = engineWorker;
+    if (!worker){ reject(new Error('Engine not initialized.')); return; }
+    let lastInfo = null;
+    function handler(e){
+      const line = e.data;
+      if (typeof line !== 'string') return;
+      if (line.startsWith('info') && line.includes(' pv ')){
+        lastInfo = line;
+        const m = line.match(/\bdepth (\d+)/);
+        if (m) setStatus(`Thinking… depth ${m[1]}`);
+      } else if (line.startsWith('bestmove')){
+        worker.removeEventListener('message', handler);
+        const parts = line.split(' ');
+        resolve({ bestMove: parts[1], lastInfo });
+      }
+    }
+    worker.addEventListener('message', handler);
+    worker.postMessage('position fen ' + fen);
+    worker.postMessage('go movetime ' + movetimeMs);
+  });
+}
+
+function parseEval(infoLine, sideToMove){
+  if (!infoLine) return null;
+  const mMate = infoLine.match(/score mate (-?\d+)/);
+  const mCp = infoLine.match(/score cp (-?\d+)/);
+  let text;
+  if (mMate){
+    let n = parseInt(mMate[1],10);
+    if (sideToMove === 'b') n = -n;
+    text = n === 0 ? 'Checkmate' : `Mate in ${Math.abs(n)} for ${n>0?'White':'Black'}`;
+  } else if (mCp){
+    let cp = parseInt(mCp[1],10);
+    if (sideToMove === 'b') cp = -cp;
+    const pawns = (cp/100).toFixed(2);
+    text = `${cp>=0?'+':''}${pawns}  (${cp>=0?'White':'Black'} is better)`;
+  } else {
+    text = 'Evaluation unavailable';
+  }
+  const pvMatch = infoLine.match(/ pv (.+)$/);
+  const pv = pvMatch ? pvMatch[1] : '';
+  return { text, pv };
+}
+
+/* ---------- calculate button ---------- */
+const resultBox = document.getElementById('result');
+const resultHeadline = document.getElementById('resultHeadline');
+const resultEval = document.getElementById('resultEval');
+const resultPv = document.getElementById('resultPv');
+const pawnCallout = document.getElementById('pawnCallout');
+const btnCalc = document.getElementById('btnCalc');
+const btnPlayMove = document.getElementById('btnPlayMove');
+
+btnCalc.addEventListener('click', async () => {
+  clearHighlights();
+  resultBox.classList.remove('show');
+  pawnCallout.style.display = 'none';
+  const fen = stateToFen();
+
+  let chess;
+  try{
+    chess = new Chess(fen);
+  }catch(err){
+    setStatus('Position is not legal: ' + err.message, true);
+    return;
+  }
+
+  btnCalc.disabled = true;
+  try{
+    await initEngine();
+    const movetimeMs = parseInt(thinkTime.value,10) * 1000;
+    setStatus('Thinking…');
+    const { bestMove, lastInfo } = await analyzePosition(fen, movetimeMs);
+    if (!bestMove || bestMove === '(none)'){
+      setStatus('No legal moves in this position (checkmate or stalemate).', true);
+      btnCalc.disabled = false;
+      return;
+    }
+    const from = bestMove.slice(0,2);
+    const to = bestMove.slice(2,4);
+    const promotion = bestMove.length > 4 ? bestMove[4] : undefined;
+
+    const chessForMove = new Chess(fen);
+    const moveObj = chessForMove.move({ from, to, promotion });
+    if (!moveObj){
+      setStatus('Engine returned a move chess.js could not apply: ' + bestMove, true);
+      btnCalc.disabled = false;
+      return;
+    }
+
+    const colorWord = moveObj.color === 'w' ? 'White' : 'Black';
+    const pieceWord = PIECE_NAMES[moveObj.piece];
+    resultHeadline.textContent = `${colorWord} to play: ${moveObj.san}`;
+
+    if (moveObj.piece === 'p'){
+      pawnCallout.style.display = 'block';
+      pawnCallout.textContent = `Best square for the pawn: move it from ${from} to ${to}` +
+        (moveObj.promotion ? ` (promoting to ${PIECE_NAMES[moveObj.promotion]})` : '') +
+        (moveObj.captured ? `, capturing on ${to}.` : '.');
+    } else {
+      pawnCallout.style.display = 'none';
+    }
+
+    const evalInfo = parseEval(lastInfo, turn);
+    resultEval.textContent = evalInfo ? evalInfo.text : '';
+    resultPv.textContent = evalInfo && evalInfo.pv ? ('Principal line: ' + evalInfo.pv) : '';
+
+    highlightMove(from, to);
+    lastResult = { from, to, promotion };
+    resultBox.classList.add('show');
+    setStatus(`Done (${(movetimeMs/1000).toFixed(0)}s search).`);
+  }catch(err){
+    setStatus('Error: ' + err.message, true);
+  }finally{
+    btnCalc.disabled = false;
+  }
+});
+
+btnPlayMove.addEventListener('click', () => {
+  if (!lastResult) return;
+  const { from, to, promotion } = lastResult;
+  const movingPiece = board[from];
+  const isCapture = !!board[to];
+  delete board[from];
+  board[to] = promotion ? (turn==='w' ? promotion.toUpperCase() : promotion.toLowerCase()) : movingPiece;
+  // very light-weight castling rook move handling
+  if (movingPiece && movingPiece.toLowerCase()==='k'){
+    if (from==='e1' && to==='g1'){ board['f1']=board['h1']; delete board['h1']; }
+    if (from==='e1' && to==='c1'){ board['d1']=board['a1']; delete board['a1']; }
+    if (from==='e8' && to==='g8'){ board['f8']=board['h8']; delete board['h8']; }
+    if (from==='e8' && to==='c8'){ board['d8']=board['a8']; delete board['a8']; }
+  }
+  if (movingPiece==='p' || movingPiece==='P' || isCapture) halfmove = 0; else halfmove++;
+  if (turn==='b') fullmove++;
+  setTurnUI(turn==='w' ? 'b' : 'w');
+  ep = '-';
+  document.getElementById('epField').value = '-';
+  renderBoard();
+  resultBox.classList.remove('show');
+  setStatus('Move played on the board.');
+});
+
+/* ---------- init ---------- */
+buildPalette();
+parseFenToState(START_FEN);
+setTurnUI(turn);
+syncCastleUI();
+renderBoard();
+</script>
+</body>
+</html>
