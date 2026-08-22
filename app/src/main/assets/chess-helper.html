@@ -167,20 +167,29 @@
   </div>
 
   <footer>
-    Engine: Stockfish 18 (lite, single-thread, WASM) by Nathan Rugg / Chess.com, loaded live from jsdelivr.<br>
-    Rules &amp; SAN via chess.js. Nothing here is uploaded anywhere — it all runs locally in this tab.
+    Engine: Stockfish 18 (lite, single-thread, WASM) by Nathan Rugg / Chess.com, bundled with the app.<br>
+    Rules &amp; SAN via chess.js. Nothing here is uploaded anywhere — it all runs locally in this tab, fully offline.
   </footer>
 
 <script type="module">
-import { Chess } from "https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js";
+/* Prefer the copy bundled into the APK (assets/vendor/chess.js) so the app
+   works fully offline. Fall back to jsdelivr only if that's ever missing. */
+let Chess;
+try {
+  ({ Chess } = await import("./vendor/chess.js"));
+} catch (e) {
+  ({ Chess } = await import("https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js"));
+}
 
 /* ---------- constants ---------- */
 const FILES = ['a','b','c','d','e','f','g','h'];
 const START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-const SF_VERSION = "18.0.8";
-const SF_BASE = `https://cdn.jsdelivr.net/npm/stockfish@${SF_VERSION}/bin/`;
-const SF_JS = SF_BASE + "stockfish-18-lite-single.js";
-const SF_WASM = SF_BASE + "stockfish-18-lite-single.wasm";
+const SF_VERSION = "18.0.8"; // only used for the CDN fallback below
+const LOCAL_SF_JS = new URL("engine/stockfish-18-lite-single.js", document.baseURI).href;
+const LOCAL_SF_WASM = new URL("engine/stockfish-18-lite-single.wasm", document.baseURI).href;
+const CDN_SF_BASE = `https://cdn.jsdelivr.net/npm/stockfish@${SF_VERSION}/bin/`;
+const CDN_SF_JS = CDN_SF_BASE + "stockfish-18-lite-single.js";
+const CDN_SF_WASM = CDN_SF_BASE + "stockfish-18-lite-single.wasm";
 
 const WHITE_GLYPHS = {K:'♔',Q:'♕',R:'♖',B:'♗',N:'♘',P:'♙'};
 const BLACK_GLYPHS = {k:'♚',q:'♛',r:'♜',b:'♝',n:'♞',p:'♟'};
@@ -422,16 +431,26 @@ function setStatus(msg, isErr){ statusEl.textContent = msg||''; statusEl.classLi
 let engineWorker = null;
 let engineReadyPromise = null;
 
+async function loadEngineScript(){
+  // Bundled copy first (works fully offline, no CDN dependency).
+  try {
+    const resp = await fetch(LOCAL_SF_JS);
+    if (resp.ok) return { code: await resp.text(), wasmUrl: LOCAL_SF_WASM };
+  } catch (e) { /* fall through to CDN */ }
+  // Fallback: fetch from jsdelivr in case the bundled asset is ever missing.
+  const resp = await fetch(CDN_SF_JS);
+  if (!resp.ok) throw new Error(`Could not load the engine (bundled asset missing and CDN returned HTTP ${resp.status}).`);
+  return { code: await resp.text(), wasmUrl: CDN_SF_WASM };
+}
+
 function initEngine(){
   if (engineReadyPromise) return engineReadyPromise;
   engineReadyPromise = (async () => {
-    setStatus('Downloading Stockfish (~7 MB, first run only)…');
-    const resp = await fetch(SF_JS);
-    if (!resp.ok) throw new Error(`Could not fetch engine script (HTTP ${resp.status}). Check your connection.`);
-    const code = await resp.text();
+    setStatus('Starting engine…');
+    const { code, wasmUrl } = await loadEngineScript();
     const blob = new Blob([code], { type: 'application/javascript' });
     const blobUrl = URL.createObjectURL(blob);
-    const worker = new Worker(blobUrl + '#' + encodeURIComponent(SF_WASM));
+    const worker = new Worker(blobUrl + '#' + encodeURIComponent(wasmUrl));
     engineWorker = worker;
     setStatus('Starting engine…');
     await new Promise((resolve, reject) => {
