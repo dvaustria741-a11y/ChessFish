@@ -60,6 +60,9 @@
   .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;}
   button.action{flex:1;min-width:120px;background:var(--panel-2);border:1px solid var(--line);color:var(--ink);padding:9px 10px;border-radius:8px;font-size:.85rem;cursor:pointer;}
   button.action:active{background:var(--line);}
+  button.action:disabled{opacity:.4;cursor:default;}
+  button.action:disabled:active{background:var(--panel-2);}
+  .hist-row button.action{min-width:0;font-weight:700;}
   button.primary{background:var(--gold);color:#1a1410;border:none;font-weight:700;font-size:.95rem;padding:12px;flex:1 1 100%;border-radius:9px;}
   button.primary:disabled{opacity:.5;}
   button.primary:active{background:var(--gold-dim);}
@@ -109,6 +112,13 @@
           </marker>
         </defs>
       </svg>
+    </div>
+
+    <div class="row hist-row">
+      <button class="action" id="btnHistFirst" title="Jump to first">&laquo;</button>
+      <button class="action" id="btnHistBack" title="Undo">&lsaquo;</button>
+      <button class="action" id="btnHistFwd" title="Redo">&rsaquo;</button>
+      <button class="action" id="btnHistLast" title="Jump to last">&raquo;</button>
     </div>
 
     <div class="palette" id="paletteWhite"></div>
@@ -204,6 +214,51 @@ let ep = '-';
 let halfmove = 0, fullmove = 1;
 let selectedTool = null; // piece char or 'erase' or null
 let lastResult = null;   // {from,to,promotion,fenBefore}
+
+/* ---------- undo / redo history ---------- */
+let history = [];
+let historyIndex = -1;
+
+function snapshotState(){
+  return {
+    board: {...board},
+    turn, castle: {...castle}, ep, halfmove, fullmove
+  };
+}
+function pushHistory(){
+  history = history.slice(0, historyIndex+1);
+  history.push(snapshotState());
+  historyIndex = history.length - 1;
+  updateHistoryButtons();
+}
+function restoreSnapshot(snap){
+  board = {...snap.board};
+  turn = snap.turn;
+  castle = {...snap.castle};
+  ep = snap.ep;
+  halfmove = snap.halfmove;
+  fullmove = snap.fullmove;
+}
+function goToHistory(index){
+  if (!history.length) return;
+  index = Math.max(0, Math.min(history.length-1, index));
+  if (index === historyIndex) return;
+  historyIndex = index;
+  restoreSnapshot(history[historyIndex]);
+  document.getElementById('epField').value = ep;
+  syncCastleUI();
+  setTurnUI(turn);
+  renderBoard();
+  updateHistoryButtons();
+}
+function updateHistoryButtons(){
+  const atStart = historyIndex <= 0;
+  const atEnd = historyIndex >= history.length - 1;
+  document.getElementById('btnHistFirst').disabled = atStart;
+  document.getElementById('btnHistBack').disabled = atStart;
+  document.getElementById('btnHistFwd').disabled = atEnd;
+  document.getElementById('btnHistLast').disabled = atEnd;
+}
 
 function parseFenToState(fen){
   const parts = fen.trim().split(/\s+/);
@@ -306,14 +361,19 @@ function renderBoard(){
 
 function onSquareClick(square){
   if (selectedTool === 'erase'){
+    if (!board[square]) return; // nothing to erase
     delete board[square];
   } else if (selectedTool){
     board[square] = selectedTool;
   } else {
-    if (board[square]) delete board[square];
-    else return; // nothing to do, no tool selected and square empty
+    // No tool selected: tapping the board does nothing on its own — this
+    // used to silently delete whatever piece was there, which felt like
+    // pieces vanishing at random. Pick a piece from the palette, or tap
+    // the ✕ eraser, to make a change.
+    return;
   }
   renderBoard();
+  pushHistory();
 }
 
 /* ---------- palette ---------- */
@@ -380,6 +440,7 @@ document.getElementById('btnLoadFen').addEventListener('click', ()=>{
     document.getElementById('cq').checked = castle.q;
     setTurnUI(turn);
     renderBoard();
+    pushHistory();
     setStatus('FEN loaded.');
   }catch(err){
     setStatus('FEN error: ' + err.message, true);
@@ -392,8 +453,8 @@ document.getElementById('btnCopyFen').addEventListener('click', async ()=>{
 });
 
 /* ---------- setup controls ---------- */
-document.getElementById('btnStart').addEventListener('click', ()=>{ parseFenToState(START_FEN); setTurnUI(turn); syncCastleUI(); renderBoard(); });
-document.getElementById('btnClear').addEventListener('click', ()=>{ board = {}; renderBoard(); });
+document.getElementById('btnStart').addEventListener('click', ()=>{ parseFenToState(START_FEN); setTurnUI(turn); syncCastleUI(); renderBoard(); pushHistory(); });
+document.getElementById('btnClear').addEventListener('click', ()=>{ board = {}; renderBoard(); pushHistory(); });
 document.getElementById('btnFlip').addEventListener('click', ()=>{ orientation = orientation==='white' ? 'black' : 'white'; renderBoard(); });
 
 function setTurnUI(t){
@@ -401,8 +462,8 @@ function setTurnUI(t){
   document.getElementById('btnWhiteMove').classList.toggle('selected', t==='w');
   document.getElementById('btnBlackMove').classList.toggle('selected', t==='b');
 }
-document.getElementById('btnWhiteMove').addEventListener('click', ()=>{setTurnUI('w'); syncFenBox();});
-document.getElementById('btnBlackMove').addEventListener('click', ()=>{setTurnUI('b'); syncFenBox();});
+document.getElementById('btnWhiteMove').addEventListener('click', ()=>{setTurnUI('w'); syncFenBox(); pushHistory();});
+document.getElementById('btnBlackMove').addEventListener('click', ()=>{setTurnUI('b'); syncFenBox(); pushHistory();});
 function syncCastleUI(){
   document.getElementById('cK').checked = castle.K;
   document.getElementById('cQ').checked = castle.Q;
@@ -414,9 +475,17 @@ function syncCastleUI(){
     const key = id.slice(1);
     castle[key] = e.target.checked;
     syncFenBox();
+    pushHistory();
   });
 });
 document.getElementById('epField').addEventListener('input', (e)=>{ ep = e.target.value.trim() || '-'; syncFenBox(); });
+document.getElementById('epField').addEventListener('change', ()=>{ pushHistory(); });
+
+/* ---------- undo / redo buttons ---------- */
+document.getElementById('btnHistFirst').addEventListener('click', ()=> goToHistory(0));
+document.getElementById('btnHistBack').addEventListener('click', ()=> goToHistory(historyIndex-1));
+document.getElementById('btnHistFwd').addEventListener('click', ()=> goToHistory(historyIndex+1));
+document.getElementById('btnHistLast').addEventListener('click', ()=> goToHistory(history.length-1));
 
 /* ---------- think time ---------- */
 const thinkTime = document.getElementById('thinkTime');
@@ -613,6 +682,7 @@ btnPlayMove.addEventListener('click', () => {
   ep = '-';
   document.getElementById('epField').value = '-';
   renderBoard();
+  pushHistory();
   resultBox.classList.remove('show');
   setStatus('Move played on the board.');
 });
@@ -623,6 +693,7 @@ parseFenToState(START_FEN);
 setTurnUI(turn);
 syncCastleUI();
 renderBoard();
+pushHistory();
 </script>
 </body>
 </html>
