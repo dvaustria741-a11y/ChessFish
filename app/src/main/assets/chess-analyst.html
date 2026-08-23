@@ -8,11 +8,11 @@
 </head>
 <body>
 
-  <a class="back-link" href="home.html">&laquo; Back</a>
+  <a class="back-link" href="home.html" id="backLink">&laquo; Back</a>
   <h1>♟ Chess Analyst</h1>
-  <p class="subtitle">Pull up your chess.com games and step through them with Stockfish 18 — with optional spoken read-out.</p>
+  <p class="subtitle" id="pageSubtitle">Pull up your chess.com games and get a full Game Review — coached move by move, with real Stockfish 18 behind every verdict.</p>
 
-  <div class="card">
+  <div class="card" id="loadCard">
     <h2>Load your games</h2>
     <label class="field">Chess.com username</label>
     <input type="text" id="usernameInput" placeholder="e.g. hikaru" autocapitalize="none" autocorrect="off" spellcheck="false">
@@ -21,14 +21,90 @@
     <div class="game-list" id="gameList"></div>
   </div>
 
-  <div class="card" id="gameCard" style="display:none;">
-    <h2 id="gameCardTitle">Game</h2>
+  <!-- ===================== ANALYZING (progress) ===================== -->
+  <div class="card review-loading" id="loadingCard" style="display:none;">
+    <div class="coach-row">
+      <div class="coach-avatar">♞</div>
+      <div class="coach-bubble">
+        <div class="coach-quote" id="loadingQuote">Even a poor plan is better than no plan at all. &mdash; Mikhail Chigorin</div>
+      </div>
+    </div>
+    <div class="mini-board" id="miniBoard"></div>
+    <div class="progress-wrap">
+      <div class="progress-pct" id="progressPct">0%</div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    </div>
+  </div>
+
+  <!-- ===================== SUMMARY ===================== -->
+  <div class="card" id="summaryCard" style="display:none;">
+    <div class="coach-row">
+      <div class="coach-avatar">♞</div>
+      <div class="coach-bubble"><div id="summaryVerdict">Nice game.</div></div>
+    </div>
+
+    <div class="eval-graph-wrap"><svg id="evalGraph" viewBox="0 0 300 70" preserveAspectRatio="none"></svg></div>
+
+    <div class="players-row">
+      <div class="player-col">
+        <div class="player-name" id="p1Name">You</div>
+        <div class="player-avatar you">♙</div>
+        <div class="acc-box you"><div class="acc-num" id="p1Acc">-</div><div class="acc-label">Accuracy</div></div>
+      </div>
+      <div class="player-col">
+        <div class="player-name" id="p2Name">Opponent</div>
+        <div class="player-avatar opp">♟</div>
+        <div class="acc-box opp"><div class="acc-num" id="p2Acc">-</div><div class="acc-label">Accuracy</div></div>
+      </div>
+    </div>
+
+    <div class="stat-table" id="statTable"></div>
+    <button class="link" id="btnExpandStats">Show all categories &#8964;</button>
+
+    <div class="stat-row-simple">
+      <span>Game Rating (est.)</span>
+      <div class="stat-two"><b id="p1Rating">-</b><b id="p2Rating">-</b></div>
+    </div>
+    <div class="stat-row-simple">
+      <span>Opening</span>
+      <div class="stat-two"><span class="phase-badge" id="p1Opening">-</span><span class="phase-badge" id="p2Opening">-</span></div>
+    </div>
+    <div class="stat-row-simple">
+      <span>Middlegame</span>
+      <div class="stat-two"><span class="phase-badge" id="p1Middle">-</span><span class="phase-badge" id="p2Middle">-</span></div>
+    </div>
+    <div class="stat-row-simple">
+      <span>Endgame</span>
+      <div class="stat-two"><span class="phase-badge" id="p1Endgame">-</span><span class="phase-badge" id="p2Endgame">-</span></div>
+    </div>
+
+    <button class="action" id="btnNewGame" style="margin-top:14px;">&laquo; Choose a different game</button>
+    <button class="primary" id="btnStartReview" style="margin-top:10px;">Start Review</button>
+  </div>
+
+  <!-- ===================== STEP-THROUGH REVIEW ===================== -->
+  <div class="card" id="reviewCard" style="display:none;">
+    <div class="coach-row">
+      <div class="coach-avatar">♞</div>
+      <div class="coach-bubble">
+        <div class="coach-headline-row">
+          <span class="badge-chip" id="stepBadgeIcon"></span>
+          <span id="stepHeadline">&nbsp;</span>
+          <span class="coach-evalpill" id="stepEvalPill"></span>
+        </div>
+        <div class="coach-comment" id="stepComment"></div>
+      </div>
+    </div>
+
     <div class="board-wrap">
       <div class="board-grid" id="boardGrid"></div>
       <svg class="arrow-layer" id="arrowLayer" viewBox="0 0 8 8" preserveAspectRatio="none">
         <defs>
           <marker id="arrowhead" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
             <path d="M0,0 L3,1.5 L0,3 Z" fill="#4f8f6d" />
+          </marker>
+          <marker id="arrowhead-best" markerWidth="3" markerHeight="3" refX="1.6" refY="1.5" orient="auto">
+            <path d="M0,0 L3,1.5 L0,3 Z" fill="#c9a24a" />
           </marker>
         </defs>
       </svg>
@@ -37,37 +113,40 @@
     <div class="row hist-row">
       <button class="action" id="btnFirst" title="Start of game">&laquo;</button>
       <button class="action" id="btnPrev" title="Previous move">&lsaquo;</button>
-      <button class="action" id="btnNext" title="Next move">&rsaquo;</button>
+      <button class="action" id="btnNext2" title="Next move">&rsaquo;</button>
       <button class="action" id="btnLast" title="End of game">&raquo;</button>
     </div>
-
     <div class="move-strip" id="moveStrip"></div>
 
     <div class="voice-row">
       <label><input type="checkbox" id="voiceToggle"> Read moves &amp; analysis aloud</label>
     </div>
 
-    <div class="think-time-label">Think time <b id="thinkTimeLabel">5 seconds</b></div>
-    <input type="range" id="thinkTime" min="1" max="15" step="1" value="5">
-    <button class="primary" id="btnAnalyze" style="margin-top:12px;">Analyze this position</button>
-    <div id="status"></div>
-
-    <div class="result" id="result">
-      <div class="headline" id="resultHeadline"></div>
-      <div class="eval" id="resultEval"></div>
-      <div class="pv" id="resultPv"></div>
+    <div class="row" style="margin-top:14px;">
+      <button class="action" id="btnShow">Show</button>
+      <button class="action" id="btnBest">Best</button>
+      <button class="action" id="btnRetry">Retry</button>
+      <button class="primary" id="btnNext" style="flex:2;">Next</button>
     </div>
+    <div id="status"></div>
+    <button class="link" id="btnBackToSummary" style="margin-top:10px;">&laquo; Back to summary</button>
   </div>
 
   <footer>
     Games are pulled straight from chess.com's public data API — nothing you view here is uploaded anywhere.<br>
-    Engine: Stockfish 18 (lite, single-thread, WASM), bundled with the app and running fully offline.
+    Engine: Stockfish 18 (lite, single-thread, WASM), bundled with the app and running fully offline.<br>
+    Accuracy, ratings, and move verdicts are engine-based estimates, not official chess.com data.
   </footer>
 
 <script type="module">
-import { FILES, WHITE_GLYPHS, BLACK_GLYPHS, pieceImgSrc } from "./shared/chess-constants.js";
+import { FILES, pieceImgSrc } from "./shared/chess-constants.js";
 import { loadChessJs } from "./shared/chess-import.js";
-import { createEngine, parseEval } from "./shared/engine.js";
+import { createEngine } from "./shared/engine.js";
+import {
+  rawEvalCp, accuracyFromCpLoss, classifyMove, coachLine, headline,
+  detectSacrifice, phaseIcon, nonPawnMaterial, estimatedRating,
+  BADGES, BADGE_ORDER, BADGE_ORDER_COLLAPSED
+} from "./shared/review.js";
 
 const Chess = await loadChessJs();
 
@@ -75,10 +154,14 @@ const Chess = await loadChessJs();
 let username = '';
 let orientation = 'white';
 let board = {};
-let turn = 'w';
-let plies = [];       // [{fen, san, color}], index 0 = start position (san/color null)
+let plies = [];       // [{fen, san, color, from, to, promotion, captured}], index 0 = start
 let currentPly = 0;
 let voiceOn = false;
+let myColor = 'w';     // which side the logged-in user played
+let opponentName = 'Opponent';
+let analysis = [];     // per ply k: { evalCp, bestMove } for plies[k].fen
+let reviewMoves = [];  // per ply i (1..N): { classification, cpLoss, accuracy }
+let statsExpanded = false;
 
 /* ---------- helpers ---------- */
 function escapeHtml(s){
@@ -111,8 +194,10 @@ const usernameInput = document.getElementById('usernameInput');
 const btnLoadGames = document.getElementById('btnLoadGames');
 const loadStatus = document.getElementById('loadStatus');
 const gameList = document.getElementById('gameList');
-const gameCard = document.getElementById('gameCard');
-const gameCardTitle = document.getElementById('gameCardTitle');
+const loadCard = document.getElementById('loadCard');
+const loadingCard = document.getElementById('loadingCard');
+const summaryCard = document.getElementById('summaryCard');
+const reviewCard = document.getElementById('reviewCard');
 
 function setLoadStatus(msg, isErr){
   loadStatus.textContent = msg || '';
@@ -127,7 +212,6 @@ async function loadGamesList(){
   if (!uname){ setLoadStatus('Enter a chess.com username.', true); return; }
   username = uname;
   gameList.innerHTML = '';
-  gameCard.style.display = 'none';
   btnLoadGames.disabled = true;
   setLoadStatus('Looking up archives…');
   try {
@@ -141,7 +225,6 @@ async function loadGamesList(){
       setLoadStatus('That account has no games yet.');
       return;
     }
-    // Most recent couple of months is plenty for a "recent games" list.
     const recentArchives = archives.slice(-2).reverse();
     setLoadStatus('Loading recent games…');
     let games = [];
@@ -160,7 +243,7 @@ async function loadGamesList(){
       return;
     }
     renderGameList(games);
-    setLoadStatus(`Loaded ${games.length} recent game${games.length===1?'':'s'}. Tap one to open it.`);
+    setLoadStatus(`Loaded ${games.length} recent game${games.length===1?'':'s'}. Tap one to review it.`);
   } catch(err){
     setLoadStatus('Error: ' + err.message, true);
   } finally {
@@ -184,14 +267,19 @@ function renderGameList(games){
         `<span class="gi-meta">${escapeHtml(game.time_class||'')} · ${escapeHtml(date)}</span>` +
       `</div>` +
       `<span class="gi-result ${result}">${result.toUpperCase()}</span>`;
-    item.addEventListener('click', () => loadGame(game, isWhite, opponent));
+    item.addEventListener('click', () => startReviewFlow(game, isWhite, opponent));
     gameList.appendChild(item);
   }
 }
 
-/* ---------- selected game ---------- */
-function loadGame(game, isWhite, opponent){
-  const cleanPgn = (game.pgn||'').replace(/\{[^}]*\}/g, ''); // strip {%clk ...} etc, chess.js doesn't need them
+/* ================== FULL-GAME ANALYSIS ================== */
+const engine = createEngine(()=>{});
+const progressFill = document.getElementById('progressFill');
+const progressPct = document.getElementById('progressPct');
+const miniBoard = document.getElementById('miniBoard');
+
+async function startReviewFlow(game, isWhite, opponent){
+  const cleanPgn = (game.pgn||'').replace(/\{[^}]*\}/g, '');
   let chess;
   try {
     chess = new Chess();
@@ -205,17 +293,230 @@ function loadGame(game, isWhite, opponent){
   plies = [{ fen: replay.fen(), san: null, color: null }];
   for (const mv of moves){
     replay.move(mv.san);
-    plies.push({ fen: replay.fen(), san: mv.san, color: mv.color });
+    plies.push({ fen: replay.fen(), san: mv.san, color: mv.color, from: mv.from, to: mv.to, promotion: mv.promotion, captured: mv.captured, piece: mv.piece });
   }
   orientation = isWhite ? 'white' : 'black';
-  gameCardTitle.textContent = `${isWhite?'White':'Black'} vs ${opponent||'?'}`;
-  gameCard.style.display = 'block';
-  renderMoveStrip();
-  goToPly(0);
-  gameCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  myColor = isWhite ? 'w' : 'b';
+  opponentName = opponent || 'Opponent';
+  document.getElementById('p1Name').textContent = username || 'You';
+  document.getElementById('p2Name').textContent = opponentName;
+
+  loadCard.style.display = 'none';
+  loadingCard.style.display = 'block';
+  loadingCard.scrollIntoView({ behavior:'smooth', block:'start' });
+  renderMiniBoard(plies[0].fen);
+
+  try{
+    await engine.init();
+    analysis = new Array(plies.length);
+    const N = plies.length - 1;
+    for (let k=0; k<plies.length; k++){
+      const { bestMove, lastInfo } = await engine.analyze(plies[k].fen, 400, ()=>{});
+      analysis[k] = { evalCp: rawEvalCp(lastInfo), bestMove: (bestMove && bestMove !== '(none)') ? bestMove : null };
+      const pct = Math.round(((k+1)/plies.length)*100);
+      progressFill.style.width = pct + '%';
+      progressPct.textContent = pct + '%';
+      renderMiniBoard(plies[k].fen);
+    }
+    buildReviewMoves();
+    showSummary();
+  }catch(err){
+    setLoadStatus('Analysis error: ' + err.message, true);
+    loadingCard.style.display = 'none';
+    loadCard.style.display = 'block';
+  }
 }
 
-/* ---------- move navigation ---------- */
+function renderMiniBoard(fen){
+  const { board: b } = fenToBoardTurn(fen);
+  miniBoard.innerHTML = '';
+  for (let row=0; row<8; row++){
+    for (let col=0; col<8; col++){
+      const file = FILES[col];
+      const rank = 8-row;
+      const square = file+rank;
+      const isDark = (col + (rank-1)) % 2 === 0;
+      const div = document.createElement('div');
+      div.className = 'msq ' + (isDark?'dark':'light');
+      const piece = b[square];
+      if (piece){
+        const img = document.createElement('img');
+        img.src = pieceImgSrc(piece);
+        div.appendChild(img);
+      }
+      miniBoard.appendChild(div);
+    }
+  }
+}
+
+/* ================== CLASSIFY EVERY MOVE ================== */
+const BOOK_PLY_LIMIT = 8; // 4 full moves each side
+
+function buildReviewMoves(){
+  reviewMoves = [null]; // index 0 unused (no move led to the start position)
+  for (let i=1; i<plies.length; i++){
+    const before = analysis[i-1];
+    const afterEval = analysis[i].evalCp; // opponent's perspective
+    const moverEvalActual = -afterEval;
+    const cpLoss = Math.max(0, before.evalCp - moverEvalActual);
+    const moveObj = plies[i];
+    const uci = (moveObj.from||'') + (moveObj.to||'') + (moveObj.promotion||'');
+    const isTop = !!before.bestMove && before.bestMove === uci;
+    const sacrifice = detectSacrifice(Chess, plies[i].fen, moveObj);
+    const isBookPly = i <= BOOK_PLY_LIMIT;
+    const classification = classifyMove({
+      cpLoss, isTop, sacrifice, moveObj, isBookPly, moverEvalBefore: before.evalCp
+    });
+    reviewMoves[i] = {
+      classification,
+      cpLoss,
+      accuracy: accuracyFromCpLoss(cpLoss),
+      bestMove: before.bestMove,
+      isTop,
+    };
+  }
+}
+
+/* ================== SUMMARY SCREEN ================== */
+const statTable = document.getElementById('statTable');
+const btnExpandStats = document.getElementById('btnExpandStats');
+btnExpandStats.addEventListener('click', ()=>{ statsExpanded = !statsExpanded; renderStatTable(); });
+
+function sideOf(i){ return plies[i].color; } // 'w' | 'b'
+
+function showSummary(){
+  loadingCard.style.display = 'none';
+  summaryCard.style.display = 'block';
+  summaryCard.scrollIntoView({ behavior:'smooth', block:'start' });
+
+  const myMoves = [], oppMoves = [];
+  for (let i=1;i<plies.length;i++){
+    (sideOf(i)===myColor ? myMoves : oppMoves).push(reviewMoves[i]);
+  }
+  const avg = arr => arr.length ? arr.reduce((s,m)=>s+m.accuracy,0)/arr.length : 0;
+  const myAcc = avg(myMoves), oppAcc = avg(oppMoves);
+  document.getElementById('p1Acc').textContent = myAcc.toFixed(1);
+  document.getElementById('p2Acc').textContent = oppAcc.toFixed(1);
+  document.getElementById('p1Rating').textContent = estimatedRating(myAcc);
+  document.getElementById('p2Rating').textContent = estimatedRating(oppAcc);
+
+  const myBlunders = myMoves.filter(m=>m.classification==='blunder'||m.classification==='mistake').length;
+  let verdict;
+  if (myAcc >= 90) verdict = "A strong, accurate game overall — well played.";
+  else if (myAcc >= 75) verdict = "A solid game with a few moments to tighten up.";
+  else if (myBlunders > 0) verdict = "A few costly swings in this one — worth a closer look.";
+  else verdict = "Let's see how this one went, move by move.";
+  document.getElementById('summaryVerdict').textContent = verdict;
+
+  renderStatTable();
+  renderPhaseRows(myMoves, oppMoves);
+  renderEvalGraph();
+}
+
+function renderStatTable(){
+  const order = statsExpanded ? BADGE_ORDER : BADGE_ORDER_COLLAPSED;
+  const counts = { w:{}, b:{} };
+  for (const k of BADGE_ORDER){ counts.w[k]=0; counts.b[k]=0; }
+  for (let i=1;i<plies.length;i++){ counts[sideOf(i)][reviewMoves[i].classification]++; }
+  const myKey = myColor, oppKey = myColor==='w'?'b':'w';
+  let html = '';
+  for (const key of order){
+    const b = BADGES[key];
+    html += `<div class="stat-row"><span class="stat-count me">${counts[myKey][key]}</span>` +
+            `<span class="badge-chip ${b.cls}">${b.icon}</span><span class="stat-name">${b.label}</span>` +
+            `<span class="stat-count opp">${counts[oppKey][key]}</span></div>`;
+  }
+  statTable.innerHTML = html;
+  btnExpandStats.textContent = statsExpanded ? 'Show fewer categories \u2303' : 'Show all categories \u2304';
+}
+
+function renderPhaseRows(myMoves, oppMoves){
+  // Opening = first BOOK_PLY_LIMIT*1.5 plies, endgame = once non-pawn material is low, middlegame = between.
+  const endgameStartPly = (() => {
+    for (let i=1;i<plies.length;i++){
+      const placement = plies[i].fen.split(' ')[0];
+      if (nonPawnMaterial(placement) <= 14) return i;
+    }
+    return null;
+  })();
+  const openingEnd = Math.min(16, plies.length-1);
+  function phaseAvg(side, startPly, endPly){
+    if (endPly < startPly) return null;
+    const arr = [];
+    for (let i=startPly;i<=endPly;i++){ if (sideOf(i)===side) arr.push(reviewMoves[i].cpLoss); }
+    return arr.length ? arr.reduce((s,v)=>s+v,0)/arr.length : null;
+  }
+  const middleEnd = (endgameStartPly!=null ? endgameStartPly-1 : plies.length-1);
+
+  const mySide = myColor, oppSide = myColor==='w'?'b':'w';
+  const openingMine = phaseAvg(mySide, 1, openingEnd);
+  const openingOpp = phaseAvg(oppSide, 1, openingEnd);
+  const midMine = phaseAvg(mySide, openingEnd+1, middleEnd);
+  const midOpp = phaseAvg(oppSide, openingEnd+1, middleEnd);
+  const endMine = endgameStartPly!=null ? phaseAvg(mySide, endgameStartPly, plies.length-1) : null;
+  const endOpp = endgameStartPly!=null ? phaseAvg(oppSide, endgameStartPly, plies.length-1) : null;
+
+  function fill(id, avgCpLoss){
+    const el = document.getElementById(id);
+    if (avgCpLoss == null){ el.textContent = '-'; el.className = 'phase-badge'; return; }
+    const { icon, cls } = phaseIcon(avgCpLoss);
+    el.textContent = icon;
+    el.className = 'phase-badge ' + cls;
+  }
+  fill('p1Opening', openingMine); fill('p2Opening', openingOpp);
+  fill('p1Middle', midMine);      fill('p2Middle', midOpp);
+  fill('p1Endgame', endMine);     fill('p2Endgame', endOpp);
+}
+
+function renderEvalGraph(){
+  const svg = document.getElementById('evalGraph');
+  const W=300,H=70;
+  const vals = plies.map((p,i)=> {
+    const cp = analysis[i] ? analysis[i].evalCp : 0;
+    const whitePerspective = (fenToBoardTurn(p.fen).turn === 'w') ? cp : -cp;
+    return Math.max(-600, Math.min(600, whitePerspective));
+  });
+  const n = vals.length;
+  const pts = vals.map((v,i)=>{
+    const x = n<=1 ? 0 : (i/(n-1))*W;
+    const y = H/2 - (v/600)*(H/2-4);
+    return [x,y];
+  });
+  let path = `M0,${H/2} `;
+  path += pts.map(p=>`L${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
+  let dots = '';
+  for (let i=1;i<plies.length;i++){
+    const cls = reviewMoves[i].classification;
+    if (['brilliant','great','blunder','mistake','miss'].includes(cls)){
+      const [x,y] = pts[i];
+      const color = { brilliant:'#1baca6', great:'#5c8bf2', blunder:'#c94a4a', mistake:'#e0923c', miss:'#e0923c' }[cls];
+      dots += `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3" fill="${color}" />`;
+    }
+  }
+  svg.innerHTML =
+    `<line x1="0" y1="${H/2}" x2="${W}" y2="${H/2}" stroke="#ffffff22" stroke-width="1"/>` +
+    `<path d="${path}" fill="none" stroke="#e8dcc3" stroke-width="1.5"/>` + dots;
+}
+
+document.getElementById('btnNewGame').addEventListener('click', ()=>{
+  summaryCard.style.display = 'none';
+  loadCard.style.display = 'block';
+});
+
+document.getElementById('btnStartReview').addEventListener('click', ()=>{
+  summaryCard.style.display = 'none';
+  reviewCard.style.display = 'block';
+  reviewCard.scrollIntoView({ behavior:'smooth', block:'start' });
+  renderMoveStrip();
+  goToPly(1);
+});
+document.getElementById('btnBackToSummary').addEventListener('click', ()=>{
+  reviewCard.style.display = 'none';
+  summaryCard.style.display = 'block';
+  summaryCard.scrollIntoView({ behavior:'smooth', block:'start' });
+});
+
+/* ---------- move navigation (review) ---------- */
 const moveStrip = document.getElementById('moveStrip');
 function renderMoveStrip(){
   moveStrip.innerHTML = '';
@@ -225,7 +526,7 @@ function renderMoveStrip(){
     const label = i % 2 === 1 ? `${moveNumber}.${ply.san}` : ply.san;
     const chip = document.createElement('button');
     chip.type = 'button';
-    chip.className = 'move-chip';
+    chip.className = 'move-chip ' + (BADGES[reviewMoves[i].classification]?.cls||'');
     chip.dataset.idx = i;
     chip.textContent = label;
     chip.addEventListener('click', () => goToPly(i));
@@ -239,40 +540,86 @@ function updateMoveStripHighlight(){
   const current = moveStrip.querySelector('.move-chip.current');
   if (current) current.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
-function plyLabel(idx){
-  const moveNumber = Math.ceil(idx/2);
-  return idx % 2 === 1 ? `Move ${moveNumber}, White` : `Move ${moveNumber}, Black`;
-}
 function updateNavButtons(){
-  const atStart = currentPly <= 0;
+  const atStart = currentPly <= 1;
   const atEnd = currentPly >= plies.length-1;
   document.getElementById('btnFirst').disabled = atStart;
   document.getElementById('btnPrev').disabled = atStart;
-  document.getElementById('btnNext').disabled = atEnd;
+  document.getElementById('btnNext2').disabled = atEnd;
   document.getElementById('btnLast').disabled = atEnd;
+  document.getElementById('btnNext').disabled = atEnd;
+  document.getElementById('btnNext').textContent = atEnd ? 'Done' : 'Next';
 }
-document.getElementById('btnFirst').addEventListener('click', ()=>goToPly(0));
+document.getElementById('btnFirst').addEventListener('click', ()=>goToPly(1));
 document.getElementById('btnPrev').addEventListener('click', ()=>goToPly(currentPly-1));
-document.getElementById('btnNext').addEventListener('click', ()=>goToPly(currentPly+1));
+document.getElementById('btnNext2').addEventListener('click', ()=>goToPly(currentPly+1));
 document.getElementById('btnLast').addEventListener('click', ()=>goToPly(plies.length-1));
+document.getElementById('btnNext').addEventListener('click', ()=>{
+  if (currentPly >= plies.length-1){ document.getElementById('btnBackToSummary').click(); return; }
+  goToPly(currentPly+1);
+});
+document.getElementById('btnRetry').addEventListener('click', ()=>goToPly(currentPly));
+
+const stepBadgeIcon = document.getElementById('stepBadgeIcon');
+const stepHeadline = document.getElementById('stepHeadline');
+const stepEvalPill = document.getElementById('stepEvalPill');
+const stepComment = document.getElementById('stepComment');
+
+function evalPillText(evalCpAtPly, fen){
+  const cp = evalCpAtPly;
+  if (Math.abs(cp) >= 90000){
+    const n = 100000-Math.abs(cp);
+    return (cp>0?'+M':'-M') + Math.max(1,n);
+  }
+  const whitePerspective = (fenToBoardTurn(fen).turn === 'w') ? cp : -cp;
+  return (whitePerspective>=0?'+':'') + (whitePerspective/100).toFixed(2);
+}
 
 function goToPly(idx){
-  idx = Math.max(0, Math.min(plies.length-1, idx));
+  idx = Math.max(1, Math.min(plies.length-1, idx));
   currentPly = idx;
   const parsed = fenToBoardTurn(plies[idx].fen);
   board = parsed.board;
-  turn = parsed.turn;
   clearHighlights();
-  resultBox.classList.remove('show');
-  setStatus('');
   renderBoard();
   updateMoveStripHighlight();
   updateNavButtons();
+
   const ply = plies[idx];
+  const rm = reviewMoves[idx];
+  const badge = BADGES[rm.classification];
+  stepBadgeIcon.textContent = badge.icon;
+  stepBadgeIcon.className = 'badge-chip ' + badge.cls;
+  stepHeadline.textContent = headline(ply.san, rm.classification, ply.color==='w');
+  stepEvalPill.textContent = evalPillText(analysis[idx].evalCp, ply.fen);
+  stepComment.textContent = coachLine(rm.classification);
+
+  highlightMove(ply.from, ply.to, 'from');
+  setStatus('');
+
   if (voiceOn){
-    speak(ply.san ? `${plyLabel(idx)}: ${ply.san}` : 'Start of game.');
+    speak(`${stepHeadline.textContent}. ${stepComment.textContent}`);
   }
 }
+
+/* ---------- Show / Best ---------- */
+document.getElementById('btnShow').addEventListener('click', ()=>{
+  const ply = plies[currentPly];
+  highlightMove(ply.from, ply.to, 'from');
+  setStatus(`${ply.san} played on the board.`);
+});
+document.getElementById('btnBest').addEventListener('click', ()=>{
+  const rm = reviewMoves[currentPly];
+  if (!rm.bestMove){ setStatus('No engine suggestion available for this position.'); return; }
+  if (rm.isTop){
+    setStatus(`${plies[currentPly].san} already was the engine's top choice.`);
+    highlightMove(plies[currentPly].from, plies[currentPly].to, 'from');
+    return;
+  }
+  const from = rm.bestMove.slice(0,2), to = rm.bestMove.slice(2,4);
+  highlightMove(from, to, 'best');
+  setStatus(`Engine's top choice here was ${from}\u2192${to}.`);
+});
 
 /* ---------- board rendering (read-only) ---------- */
 function squareGridPos(square){
@@ -328,11 +675,11 @@ function renderBoard(){
 const arrowLayer = document.getElementById('arrowLayer');
 function clearHighlights(){
   document.querySelectorAll('.square.from,.square.to').forEach(el=>{el.classList.remove('from');el.classList.remove('to');});
-  const oldLine = arrowLayer.querySelector('line');
-  if (oldLine) oldLine.remove();
+  arrowLayer.querySelectorAll('line').forEach(l=>l.remove());
 }
-function highlightMove(from,to){
+function highlightMove(from,to,kind){
   clearHighlights();
+  if (!from || !to) return;
   const fromEl = boardGrid.querySelector(`[data-square="${from}"]`);
   const toEl = boardGrid.querySelector(`[data-square="${to}"]`);
   if (fromEl) fromEl.classList.add('from');
@@ -341,8 +688,9 @@ function highlightMove(from,to){
   const line = document.createElementNS('http://www.w3.org/2000/svg','line');
   line.setAttribute('x1', a.col+0.5); line.setAttribute('y1', a.row+0.5);
   line.setAttribute('x2', b.col+0.5); line.setAttribute('y2', b.row+0.5);
-  line.setAttribute('stroke', '#4f8f6d'); line.setAttribute('stroke-width', '0.16');
-  line.setAttribute('stroke-linecap','round'); line.setAttribute('marker-end','url(#arrowhead)');
+  const color = kind==='best' ? '#c9a24a' : '#4f8f6d';
+  line.setAttribute('stroke', color); line.setAttribute('stroke-width', '0.16');
+  line.setAttribute('stroke-linecap','round'); line.setAttribute('marker-end', kind==='best' ? 'url(#arrowhead-best)' : 'url(#arrowhead)');
   arrowLayer.appendChild(line);
 }
 
@@ -361,61 +709,6 @@ function speak(text){
 /* ---------- status ---------- */
 const statusEl = document.getElementById('status');
 function setStatus(msg, isErr){ statusEl.textContent = msg||''; statusEl.classList.toggle('err', !!isErr); }
-
-/* ---------- engine ---------- */
-const engine = createEngine(setStatus);
-
-const thinkTime = document.getElementById('thinkTime');
-const thinkTimeLabel = document.getElementById('thinkTimeLabel');
-thinkTime.addEventListener('input', ()=>{ thinkTimeLabel.textContent = thinkTime.value + ' second' + (thinkTime.value==='1'?'':'s'); });
-
-const resultBox = document.getElementById('result');
-const resultHeadline = document.getElementById('resultHeadline');
-const resultEval = document.getElementById('resultEval');
-const resultPv = document.getElementById('resultPv');
-const btnAnalyze = document.getElementById('btnAnalyze');
-
-btnAnalyze.addEventListener('click', async () => {
-  clearHighlights();
-  resultBox.classList.remove('show');
-  const fen = plies[currentPly].fen;
-  btnAnalyze.disabled = true;
-  try{
-    await engine.init();
-    const movetimeMs = parseInt(thinkTime.value,10) * 1000;
-    setStatus('Thinking…');
-    const { bestMove, lastInfo } = await engine.analyze(fen, movetimeMs, (depth)=> setStatus(`Thinking… depth ${depth}`));
-    if (!bestMove || bestMove === '(none)'){
-      setStatus('No legal moves in this position (checkmate or stalemate).', true);
-      return;
-    }
-    const from = bestMove.slice(0,2);
-    const to = bestMove.slice(2,4);
-    const promotion = bestMove.length > 4 ? bestMove[4] : undefined;
-
-    const chessForMove = new Chess(fen);
-    const moveObj = chessForMove.move({ from, to, promotion });
-    if (!moveObj){
-      setStatus('Engine returned a move chess.js could not apply: ' + bestMove, true);
-      return;
-    }
-
-    const colorWord = moveObj.color === 'w' ? 'White' : 'Black';
-    resultHeadline.textContent = `${colorWord} to play: ${moveObj.san}`;
-    const evalInfo = parseEval(lastInfo, turn);
-    resultEval.textContent = evalInfo ? evalInfo.text : '';
-    resultPv.textContent = evalInfo && evalInfo.pv ? ('Principal line: ' + evalInfo.pv) : '';
-
-    highlightMove(from, to);
-    resultBox.classList.add('show');
-    setStatus(`Done (${(movetimeMs/1000).toFixed(0)}s search).`);
-    speak(`${colorWord} to play: ${moveObj.san}. ${evalInfo ? evalInfo.text : ''}`);
-  }catch(err){
-    setStatus('Error: ' + err.message, true);
-  }finally{
-    btnAnalyze.disabled = false;
-  }
-});
 </script>
 </body>
 </html>

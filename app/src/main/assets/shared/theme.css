@@ -111,3 +111,74 @@
 
   .voice-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:.85rem;color:var(--ink-dim);}
   .voice-row input{width:auto;accent-color:var(--gold);}
+
+  /* ===== Game Review (chess-analyst) ===== */
+  .coach-row{display:flex;align-items:flex-start;gap:10px;margin-bottom:14px;}
+  .coach-avatar{flex:0 0 auto;width:46px;height:46px;border-radius:50%;background:linear-gradient(160deg,var(--gold),var(--gold-dim));display:flex;align-items:center;justify-content:center;font-size:22px;color:#1a1410;}
+  .coach-bubble{position:relative;flex:1;background:var(--parchment);color:#1a1410;border-radius:10px;padding:10px 12px;font-size:.88rem;line-height:1.4;}
+  .coach-bubble:before{content:'';position:absolute;left:-6px;top:14px;border:6px solid transparent;border-right-color:var(--parchment);}
+  .coach-quote{font-style:italic;}
+  .coach-headline-row{display:flex;align-items:center;gap:8px;font-weight:700;margin-bottom:4px;flex-wrap:wrap;}
+  .coach-evalpill{margin-left:auto;background:#1a141022;border-radius:6px;padding:2px 7px;font-family:var(--mono);font-size:.78rem;font-weight:700;}
+  .coach-comment{color:#332b20;font-size:.85rem;}
+
+  .mini-board{display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);width:100%;aspect-ratio:1/1;border-radius:6px;overflow:hidden;margin-bottom:14px;}
+  .msq{position:relative;display:flex;align-items:center;justify-content:center;}
+  .msq.light{background:var(--parchment);}
+  .msq.dark{background:var(--walnut);}
+  .msq img{width:82%;height:82%;object-fit:contain;}
+
+  .progress-wrap{display:flex;align-items:center;gap:10px;}
+  .progress-pct{font-family:var(--mono);font-size:.82rem;color:var(--gold);min-width:36px;}
+  .progress-track{flex:1;height:8px;background:var(--panel-2);border-radius:5px;overflow:hidden;}
+  .progress-fill{height:100%;width:0%;background:var(--gold);transition:width .2s;}
+
+  .eval-graph-wrap{margin-bottom:14px;}
+  .eval-graph-wrap svg{width:100%;height:70px;display:block;}
+
+  .players-row{display:flex;justify-content:space-around;gap:10px;margin-bottom:14px;}
+  .player-col{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
+  .player-name{font-size:.78rem;color:var(--ink-dim);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .player-avatar{width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:20px;}
+  .player-avatar.you{background:var(--parchment);color:#1a1410;}
+  .player-avatar.opp{background:var(--panel-2);border:1px solid var(--line);color:var(--ink);}
+  .acc-box{width:100%;text-align:center;border-radius:8px;padding:8px 6px;}
+  .acc-box.you{background:var(--parchment);color:#1a1410;}
+  .acc-box.opp{background:var(--panel-2);border:1px solid var(--line);}
+  .acc-num{font-size:1.3rem;font-weight:800;}
+  .acc-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.04em;opacity:.7;}
+
+  .stat-table{display:flex;flex-direction:column;gap:2px;margin-top:6px;}
+  .stat-row{display:grid;grid-template-columns:32px 30px 1fr 32px;align-items:center;gap:8px;padding:5px 2px;font-size:.85rem;}
+  .stat-count{text-align:center;font-weight:700;color:var(--ink);}
+  .stat-count.me{}
+  .stat-count.opp{}
+  .stat-name{color:var(--ink-dim);}
+
+  .badge-chip{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;font-size:.72rem;font-weight:800;color:#fff;flex:0 0 auto;}
+  .badge-chip.brilliant{background:#1baca6;}
+  .badge-chip.great{background:#5c8bf2;}
+  .badge-chip.best{background:#4f8f6d;}
+  .badge-chip.excellent{background:#6fae6f;}
+  .badge-chip.good{background:#7a9e6b;}
+  .badge-chip.book{background:#8a6a3f;}
+  .badge-chip.inaccuracy{background:#dba33e;color:#1a1410;}
+  .badge-chip.mistake{background:#e0923c;}
+  .badge-chip.miss{background:#c96a4a;}
+  .badge-chip.blunder{background:#c94a4a;}
+
+  .stat-row-simple{display:flex;align-items:center;justify-content:space-between;padding:8px 2px;border-top:1px solid var(--line);font-size:.85rem;color:var(--ink-dim);}
+  .stat-two{display:flex;gap:22px;min-width:70px;justify-content:flex-end;}
+  .stat-two b{color:var(--parchment);font-weight:700;}
+  .phase-badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;font-size:.78rem;font-weight:800;background:var(--panel-2);color:var(--ink-dim);}
+  .phase-badge.great{background:#5c8bf2;color:#fff;}
+  .phase-badge.good{background:#6fae6f;color:#fff;}
+  .phase-badge.inaccuracy{background:#dba33e;color:#1a1410;}
+  .phase-badge.mistake{background:#e0923c;color:#fff;}
+
+  .move-chip.brilliant{border-color:#1baca6;color:#1baca6;}
+  .move-chip.great{border-color:#5c8bf2;color:#5c8bf2;}
+  .move-chip.best{border-color:#4f8f6d;color:#a9d9bd;}
+  .move-chip.blunder{border-color:#c94a4a;color:#e8b3a0;}
+  .move-chip.mistake, .move-chip.miss{border-color:#e0923c;color:#f0c090;}
+  .move-chip.inaccuracy{border-color:#dba33e;color:#e8d19a;}
